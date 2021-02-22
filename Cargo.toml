@@ -1,0 +1,52 @@
+[package]
+name = "dowser"
+version = "0.1.0"
+authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
+edition = "2018"
+description = "A multi-threaded, recursive file finding library for Unix."
+license = "WTFPL"
+repository = "https://github.com/Blobfolio/dowser"
+readme = "README.md"
+exclude = [
+	".gitignore",
+	".righteous-sandbox.json",
+	"about.toml",
+	"doc",
+	"justfile",
+	"release",
+	"tests",
+]
+
+[package.metadata.docs.rs]
+features = [ "regexp" ]
+default-target = "x86_64-unknown-linux-gnu"
+targets = [ "x86_64-unknown-linux-gnu" ]
+
+[dependencies]
+ahash = "0.7.*"
+rayon = "1.5.*"
+
+[dependencies.regex]
+version = "1.4.*"
+optional = true
+
+[dev-dependencies]
+brunch = "0.1.*"
+
+[[bench]]
+name = "dowser"
+harness = false
+
+[[bench]]
+name = "dowser_filtered"
+harness = false
+
+[[example]]
+name = "dowse"
+
+[[example]]
+name = "dowser"
+
+[features]
+# Enable Regex matching in Dowser.
+regexp = [ "regex" ]
