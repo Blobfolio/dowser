@@ -91,7 +91,7 @@ pub struct Dowser {
 	/// Files found.
 	files: Vec<PathBuf>,
 	/// Unique path hashes (to prevent duplicate scans, results).
-	seen: AHashSet<u128>,
+	seen: AHashSet<u64>,
 	/// Filter callback.
 	cb: Box<dyn Fn(&Path) -> bool + 'static + Send + Sync>,
 }

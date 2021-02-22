@@ -33,6 +33,19 @@ where P: AsRef<Path>, I: IntoParallelIterator<Item=P> {
 		.sum()
 }
 
+#[inline]
+/// # `AHash` File Uniqueness Hash.
+///
+/// Because we don't need the device or inode values individually, we can pre-
+/// hash them to halve the storage size of the `HashSet`s tracking them.
+fn hash64(dev: u64, ino: u64) -> u64 {
+	use std::hash::Hasher;
+	let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
+	hasher.write_u64(dev);
+	hasher.write_u64(ino);
+	hasher.finish()
+}
+
 #[allow(trivial_casts)] // We need triviality!
 #[must_use]
 #[inline]
@@ -58,7 +71,7 @@ pub fn path_as_bytes(p: &Path) -> &[u8] {
 /// during `ReadDir` traversal.
 ///
 /// See [`resolve_path`] for more information.
-pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>) -> Option<(u128, bool, PathBuf)> {
+pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>) -> Option<(u64, bool, PathBuf)> {
 	let entry = entry.ok()?;
 	resolve_path(entry.path(), true)
 }
@@ -79,11 +92,11 @@ pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>
 /// directory seed was canonicalized. The idea is that since `DirEntry` paths
 /// are joined to the seed, they'll be canonical so long as the seed was,
 /// except in cases of symlinks.
-pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u128, bool, PathBuf)> {
+pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, PathBuf)> {
 	use std::os::unix::fs::MetadataExt;
 
 	let meta = std::fs::metadata(&path).ok()?;
-	let hash: u128 = unsafe { *([meta.dev(), meta.ino()].as_ptr().cast::<u128>()) };
+	let hash: u64 = hash64(meta.dev(), meta.ino());
 	let dir: bool = meta.is_dir();
 
 	if trusted {
