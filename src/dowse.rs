@@ -2,9 +2,9 @@
 # Dowser: Dowse
 */
 
-use ahash::AHashSet;
 use crate::{
-	AHASH_STATE,
+	mutex_ptr,
+	NoHashState,
 	utility::{
 		resolve_dir_entry,
 		resolve_path,
@@ -16,6 +16,7 @@ use rayon::iter::{
 	ParallelIterator,
 };
 use std::{
+	collections::HashSet,
     fs::{
     	self,
     	ReadDir,
@@ -47,7 +48,7 @@ where P: AsRef<Path>, I: IntoIterator<Item=P> {
 	// Parse out seed paths.
 	let (mut dirs, files, seen) = {
 		let mut files: Vec<PathBuf> = Vec::with_capacity(2048);
-		let mut seen: AHashSet<u128> = AHashSet::with_capacity_and_hasher(2048, AHASH_STATE);
+		let mut seen = HashSet::<u64, NoHashState>::with_capacity_and_hasher(2048, NoHashState);
 
 		let dirs: Vec<ReadDir> = paths.into_iter()
 			.filter_map(|p| resolve_path(PathBuf::from(p.as_ref()), false))
@@ -78,12 +79,12 @@ where P: AsRef<Path>, I: IntoIterator<Item=P> {
 			.filter_map(resolve_dir_entry)
 			.filter_map(|(h, is_dir, p)|
 				// A new path.
-				if crate::mutex_ptr!(seen).insert(h) {
+				if mutex_ptr!(seen).insert(h) {
 					// A directory to look at on the next while.
 					if is_dir { fs::read_dir(p).ok() }
 					// A file.
 					else {
-						crate::mutex_ptr!(files).push(p);
+						mutex_ptr!(files).push(p);
 						None
 					}
 				}

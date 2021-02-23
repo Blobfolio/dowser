@@ -2,9 +2,9 @@
 # Dowser: Dowser
 */
 
-use ahash::AHashSet;
 use crate::{
-	AHASH_STATE,
+	mutex_ptr,
+	NoHashState,
 	utility::{
 		resolve_dir_entry,
 		resolve_path,
@@ -16,6 +16,7 @@ use rayon::iter::{
 	ParallelIterator,
 };
 use std::{
+	collections::HashSet,
 	convert::TryFrom,
 	fs::{
 		self,
@@ -91,7 +92,7 @@ pub struct Dowser {
 	/// Files found.
 	files: Vec<PathBuf>,
 	/// Unique path hashes (to prevent duplicate scans, results).
-	seen: AHashSet<u128>,
+	seen: HashSet<u64, NoHashState>,
 	/// Filter callback.
 	cb: Box<dyn Fn(&Path) -> bool + 'static + Send + Sync>,
 }
@@ -101,7 +102,7 @@ impl Default for Dowser {
 		Self {
 			dirs: Vec::new(),
 			files: Vec::with_capacity(2048),
-			seen: AHashSet::with_capacity_and_hasher(2048, AHASH_STATE),
+			seen: HashSet::with_capacity_and_hasher(2048, NoHashState),
 			cb: Box::new(|_: &Path| true),
 		}
 	}
@@ -277,10 +278,10 @@ impl Dowser {
 				.flat_map(ParallelBridge::par_bridge)
 				.filter_map(resolve_dir_entry)
 				.filter_map(|(h, is_dir, p)|
-					if crate::mutex_ptr!(seen).insert(h) {
+					if mutex_ptr!(seen).insert(h) {
 						if is_dir { fs::read_dir(p).ok() }
 						else {
-							if cb(&p) { crate::mutex_ptr!(files).push(p); }
+							if cb(&p) { mutex_ptr!(files).push(p); }
 							None
 						}
 					}
