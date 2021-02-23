@@ -25,7 +25,7 @@ License details for project dependencies are listed below.
 * [lazy_static 1.4.0](https://github.com/rust-lang-nursery/lazy-static.rs)
 * [libc 0.2.86](https://github.com/rust-lang/libc)
 * [num_cpus 1.13.0](https://github.com/seanmonstar/num_cpus)
-* [once_cell 1.5.2](https://github.com/matklad/once_cell)
+* [once_cell 1.6.0](https://github.com/matklad/once_cell)
 * [rayon 1.5.0](https://github.com/rayon-rs/rayon)
 * [rayon-core 1.9.0](https://github.com/rayon-rs/rayon)
 * [scopeguard 1.1.0](https://github.com/bluss/scopeguard)
@@ -481,7 +481,7 @@ SOFTWARE.
 
 **Used By:**
 
-* [dowser 0.1.0](https://github.com/Blobfolio/dowser)
+* [dowser 0.1.1](https://github.com/Blobfolio/dowser)
 
 
 ```
