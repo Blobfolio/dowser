@@ -23,7 +23,7 @@ default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu" ]
 
 [dependencies]
-wyhash = "0.5.*"
+ahash = "0.7.*"
 rayon = "1.5.*"
 
 [dependencies.regex]

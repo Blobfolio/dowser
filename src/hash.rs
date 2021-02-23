@@ -68,7 +68,7 @@ impl NoHashU64 {
 	/// This hashes a device and inode to produce a more or less unique result.
 	/// This is the value we grab for each path and use in the `HashSet`.
 	pub(crate) fn hash_path(dev: u64, ino: u64) -> u64 {
-		let mut hasher = wyhash::WyHash::default();
+		let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
 		hasher.write_u64(dev);
 		hasher.write_u64(ino);
 		hasher.finish()
