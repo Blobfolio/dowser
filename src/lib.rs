@@ -140,22 +140,17 @@ let out = Vec::<PathBuf>::try_from(
 
 mod dowse;
 mod dowser;
+mod hash;
 pub mod utility;
 
 pub use dowse::dowse;
 pub use dowser::Dowser;
 
-
-
 #[doc(hidden)]
-/// # (Not) Random State.
-///
-/// Using a fixed seed value for `AHashSet`/`AHashMap` drops a few dependencies
-/// and prevents Valgrind complaining about 64 lingering bytes from the runtime
-/// static that would be used otherwise.
-///
-/// For our purposes, the variability of truly random keys isn't really needed.
-pub(crate) const AHASH_STATE: ahash::RandomState = ahash::RandomState::with_seeds(13, 19, 23, 71);
+pub(crate) use hash::{
+	NoHashU64,
+	NoHashState,
+};
 
 
 

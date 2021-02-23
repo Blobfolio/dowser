@@ -2,6 +2,7 @@
 # Dowser: Utility Methods.
 */
 
+use crate::NoHashU64;
 use rayon::{
 	iter::ParallelIterator,
 	prelude::IntoParallelIterator,
@@ -31,19 +32,6 @@ where P: AsRef<Path>, I: IntoParallelIterator<Item=P> {
 	src.into_par_iter()
 		.map(|p| std::fs::metadata(p).map_or(0, |m| m.len()))
 		.sum()
-}
-
-#[inline]
-/// # `AHash` File Uniqueness Hash.
-///
-/// Because we don't need the device or inode values individually, we can pre-
-/// hash them to halve the storage size of the `HashSet`s tracking them.
-fn hash64(dev: u64, ino: u64) -> u64 {
-	use std::hash::Hasher;
-	let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
-	hasher.write_u64(dev);
-	hasher.write_u64(ino);
-	hasher.finish()
 }
 
 #[allow(trivial_casts)] // We need triviality!
@@ -96,7 +84,7 @@ pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, P
 	use std::os::unix::fs::MetadataExt;
 
 	let meta = std::fs::metadata(&path).ok()?;
-	let hash: u64 = hash64(meta.dev(), meta.ino());
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
 	let dir: bool = meta.is_dir();
 
 	if trusted {
