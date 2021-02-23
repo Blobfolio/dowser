@@ -1,6 +1,6 @@
 [package]
 name = "dowser"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "A multi-threaded, recursive file finding library for Unix."
