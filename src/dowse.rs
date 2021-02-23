@@ -3,6 +3,7 @@
 */
 
 use crate::{
+	mutex_ptr,
 	NoHashState,
 	utility::{
 		resolve_dir_entry,
@@ -78,12 +79,12 @@ where P: AsRef<Path>, I: IntoIterator<Item=P> {
 			.filter_map(resolve_dir_entry)
 			.filter_map(|(h, is_dir, p)|
 				// A new path.
-				if crate::mutex_ptr!(seen).insert(h) {
+				if mutex_ptr!(seen).insert(h) {
 					// A directory to look at on the next while.
 					if is_dir { fs::read_dir(p).ok() }
 					// A file.
 					else {
-						crate::mutex_ptr!(files).push(p);
+						mutex_ptr!(files).push(p);
 						None
 					}
 				}
