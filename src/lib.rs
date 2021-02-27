@@ -102,8 +102,7 @@ use std::convert::TryFrom;
 
 let out = Vec::<PathBuf>::try_from(
     Dowser::default().with_path("/usr/share/man")
-)
-    .map_err(|_| YourErrorHere)?;
+).map_err(|_| YourErrorHere)?;
 ```
 
 */

@@ -121,16 +121,16 @@ where P: AsRef<Path>, I: IntoIterator<Item=P> {
 }
 
 impl TryFrom<Dowser> for Vec<PathBuf> {
-	type Error = bool;
+	// We don't need to transmit error information beyond "it didn't work".
+	type Error = ();
 
 	/// # Build Non-Empty.
 	///
 	/// As an alternative to [`Dowser::build`], you can use this method, which
-	/// will produce an error — always `false` — in cases where no files were
-	/// found.
+	/// will produce an `Err(())` in cases where no files were found.
 	fn try_from(src: Dowser) -> Result<Self, Self::Error> {
 		let out = src.build();
-		if out.is_empty() { Err(false) }
+		if out.is_empty() { Err(()) }
 		else { Ok(out) }
 	}
 }
