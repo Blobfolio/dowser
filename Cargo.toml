@@ -12,6 +12,7 @@ exclude = [
 	".righteous-sandbox.json",
 	"about.toml",
 	"doc",
+	"examples",
 	"justfile",
 	"release",
 	"tests",
@@ -40,12 +41,6 @@ harness = false
 [[bench]]
 name = "dowser_filtered"
 harness = false
-
-[[example]]
-name = "dowse"
-
-[[example]]
-name = "dowser"
 
 [features]
 # Enable Regex matching in Dowser.
