@@ -24,7 +24,7 @@ use std::path::{
 /// ## Examples
 ///
 /// ```no_run
-/// let paths = [ "/path/one", "path/two", "path/three" ];
+/// let paths = vec![ "/path/one", "path/two", "path/three" ];
 /// let size = dowser::utility::du(&paths);
 /// ```
 pub fn du<I, P>(src: I) -> u64

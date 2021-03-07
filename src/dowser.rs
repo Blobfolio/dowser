@@ -18,6 +18,7 @@ use rayon::iter::{
 use std::{
 	collections::HashSet,
 	convert::TryFrom,
+	fmt,
 	fs::{
 		self,
 		ReadDir,
@@ -34,57 +35,82 @@ use std::{
 
 
 
+#[derive(Debug, Copy, Clone)]
+/// # Error.
+pub enum DowserError {
+	/// # No files.
+	NoFiles,
+}
+
+impl fmt::Display for DowserError {
+	#[inline]
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(self.as_str())
+	}
+}
+
+impl std::error::Error for DowserError {}
+
+impl DowserError {
+	#[must_use]
+	/// # As Str.
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::NoFiles => "No matching files were found.",
+		}
+	}
+}
+
+
+
 #[allow(missing_debug_implementations)]
 /// `Dowser` is a very simple recursive file finder. Directories are read in
 /// parallel. Symlinks are followed. Hidden files and directories are read like
 /// any other. Matching files are canonicalized, deduped, and returned.
 ///
-/// ## Filtering
+/// ## Usage
 ///
-/// Results can be filtered prior to being yielded with the use of either
-/// [`with_filter()`](Dowser::with_filter) — specifying a custom callback method
-/// — or [`with_regex()`](Dowser::with_regex) — to match against a (byte)
-/// pattern. (The latter requires the `regexp` crate feature be enabled.)
+/// An instance is initialized using one of the following three methods:
 ///
-/// It is important to define the filter *before* adding any paths, because if
-/// those paths are files, they'll need to be filtered. Right? Right.
+/// * [`Dowser::default`]: Return all files without prejudice.
+/// * [`Dowser::filtered`]: Filter file paths via the provided callback.
+/// * [`Dowser::regex`]: Filter file paths via regular express. (This requires enabling the `regexp` crate feature.)
 ///
-/// Filter callbacks should accept a `&Path` and return `true` to keep it,
-/// `false` to discard it. Ultimately, they get stored in the struct with the
-/// following type:
+/// From there, add one or more file or directory paths using the [`Dowser::with_path`]
+/// and [`Dowser::with_paths`] methods.
 ///
-/// ```ignore
-/// Box<dyn Fn(&Path) -> bool + 'static + Send + Sync>
-/// ```
+/// Finally, collect the results with `Vec::<PathBuf>::try_from()`. If no files
+/// are found, an error is returned, otherwise the matching file paths are
+/// collected into a vector.
 ///
 /// ## Examples
 ///
 /// ```no_run
 /// use dowser::Dowser;
+/// use std::convert::TryFrom;
 /// use std::os::unix::ffi::OsStrExt;
-/// use std::path::PathBuf;
+/// use std::path::{Path, PathBuf};
 ///
 /// // Return all files under "/usr/share/man".
-/// let res: Vec<PathBuf> = Dowser::default()
-///     .with_path("/usr/share/man")
-///     .build();
+/// let files = Vec::<PathBuf>::try_from(
+///    Dowser::default().with_path("/usr/share/man")
+/// ).expect("No files were found.");
 ///
-/// // Return only Gzipped files.
-/// let res: Vec<PathBuf> = Dowser::default()
-///     .with_regex(r"(?i)[^/]+\.gz$")
-///     .with_path("/usr/share/man")
-///     .build();
+/// // Return only Gzipped files using regular expression.
+/// let files = Vec::<PathBuf>::try_from(
+///     Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
+/// ).expect("No files were found.");
 ///
-/// // The same thing, done manually.
-/// let res: Vec<PathBuf> = Dowser::default()
-///     .with_filter(|p: &Path| p.extension()
+/// // Return only Gzipped files using callback filter.
+/// let files = Vec::<PathBuf>::try_from(
+///     Dowser::filtered(|p: &Path| p.extension()
 ///         .map_or(
 ///             false,
 ///             |e| e.as_bytes().eq_ignore_ascii_case(b"gz")
 ///         )
 ///     )
 ///     .with_path("/usr/share/man")
-///     .build();
+/// ).expect("No files were found.");
 /// ```
 pub struct Dowser {
 	/// Directories to scan.
@@ -108,167 +134,38 @@ impl Default for Dowser {
 	}
 }
 
-impl<I, P> From<I> for Dowser
-where P: AsRef<Path>, I: IntoIterator<Item=P> {
-	/// # From Paths.
-	///
-	/// This should only be used in cases where all paths are directories, or
-	/// no file-filtering is going to take place. Otherwise, you should start
-	/// with a [`Dowser::default`], add your filter, *then* add the paths.
-	fn from(src: I) -> Self {
-		Self::default().with_paths(src)
-	}
-}
-
 impl TryFrom<Dowser> for Vec<PathBuf> {
-	// We don't need to transmit error information beyond "it didn't work".
-	type Error = ();
+	type Error = DowserError;
 
-	/// # Build Non-Empty.
-	///
-	/// As an alternative to [`Dowser::build`], you can use this method, which
-	/// will produce an `Err(())` in cases where no files were found.
-	fn try_from(src: Dowser) -> Result<Self, Self::Error> {
-		let out = src.build();
-		if out.is_empty() { Err(()) }
-		else { Ok(out) }
-	}
-}
-
-impl Dowser {
-	/// # With Callback.
-	///
-	/// Define a custom filter callback to determine whether or not a given
-	/// file path should be yielded. Return `true` to keep it, `false` to
-	/// reject it.
-	///
-	/// ## Examples
-	///
-	/// ```ignore
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// let files = Dowser::default()
-	///     .with_filter(|p: &Path| { ... })
-	///     .with_path("/my/dir")
-	///     .build();
-	/// ```
-	pub fn with_filter<F>(mut self, cb: F) -> Self
-	where F: Fn(&Path) -> bool + 'static + Send + Sync {
-		self.cb = Box::new(cb);
-		self
-	}
-
-	#[cfg(feature = "regexp")]
-	/// # With a Regex Callback.
-	///
-	/// This is a convenience method for filtering files by regular expression.
-	/// You supply only the expression, and [`Dowser`] will test it against
-	/// the (full) path as a byte string, keeping any matches, rejecting the
-	/// rest.
-	///
-	/// This method is only available when the `regexp` crate feature is
-	/// enabled. This pulls down the [`regex`](https://crates.io/crates/regex) crate to handle the details.
-	///
-	/// Speaking of, see [here](https://docs.rs/regex/1.4.3/regex/#syntax) for syntax reference and other details.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	///
-	/// let files = Dowser::default()
-	///     .with_regex(r"(?i).+\.jpe?g$")
-	///     .with_path("/my/dir")
-	///     .build();
-	/// ```
-	pub fn with_regex<R>(mut self, reg: R) -> Self
-	where R: std::borrow::Borrow<str> {
-		use regex::bytes::Regex;
-		let pat: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
-		self.cb = Box::new(move|p: &Path| pat.is_match(crate::utility::path_as_bytes(p)));
-		self
-	}
-
-	/// # With Paths.
-	///
-	/// Append files and/or directories to the finder. File paths will be
-	/// checked against the filter callback (if any) and added straight to the
-	/// results if they pass (i.e. immediately). Directories will be queued for
-	/// later scanning (i.e. when you call [`Dowser::build`]).
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	///
-	/// let files = Dowser::default()
-	///     .with_paths(&["/my/dir"])
-	///     .build();
-	/// ```
-	pub fn with_paths<P, I>(self, paths: I) -> Self
-	where
-		P: AsRef<Path>,
-		I: IntoIterator<Item=P> {
-		paths.into_iter().fold(self, Self::with_path)
-	}
-
-	/// # With Path.
-	///
-	/// Add a path to the finder. If the path is a file, it will be checked
-	/// against the filter callback (if any) before being added to the results.
-	/// If it is a directory, it will be queued for later scanning.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	///
-	/// let files = Dowser::default()
-	///     .with_path("/my/dir")
-	///     .build();
-	/// ```
-	pub fn with_path<P>(mut self, path: P) -> Self
-	where P: AsRef<Path> {
-		if let Some((h, is_dir, p)) = resolve_path(PathBuf::from(path.as_ref()), false) {
-			if self.seen.insert(h) {
-				if is_dir {
-					if let Ok(rd) = fs::read_dir(p) {
-						self.dirs.push(rd);
-					}
-				}
-				else if (self.cb)(&p) {
-					self.files.push(p);
-				}
-			}
-		}
-
-		self
-	}
-
-	#[must_use]
-	/// # Build!
+	/// # Build!.
 	///
 	/// Once everything is set up, call this method to consume the queue and
 	/// collect the files into a `Vec<PathBuf>`.
 	///
+	/// ## Errors
+	///
+	/// This will return an error if no files are found.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
+	/// use std::convert::TryFrom;
+	/// use std::path::PathBuf;
 	///
-	/// let files = Dowser::default()
-	///     .with_path("/my/dir")
-	///     .build();
+	/// let files = Vec::<PathBuf>::try_from(
+	///     Dowser::default().with_path("/my/dir")
+	/// ).expect("No files were found.");
 	/// ```
-	pub fn build(self) -> Vec<PathBuf> {
+	fn try_from(src: Dowser) -> Result<Self, Self::Error> {
 		// We don't have to do anything!
-		if self.dirs.is_empty() {
-			return self.files;
+		if src.dirs.is_empty() {
+			if src.files.is_empty() { return Err(DowserError::NoFiles); }
+			return Ok(src.files);
 		}
 
 		// Break up the data.
-		let Self { mut dirs, files, seen, cb } = self;
+		let Dowser { mut dirs, files, seen, cb } = src;
 		let seen = Arc::from(Mutex::new(seen));
 		let files = Arc::from(Mutex::new(files));
 
@@ -292,10 +189,145 @@ impl Dowser {
 			if dirs.is_empty() { break; }
 		}
 
-		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
+		// Unwrap and return.
+		Arc::<Mutex<Self>>::try_unwrap(files)
 			.ok()
 			.and_then(|x| x.into_inner().ok())
-			.unwrap_or_default()
+			.filter(|x| ! x.is_empty())
+			.ok_or(DowserError::NoFiles)
+	}
+}
+
+/// # Instantiation.
+impl Dowser {
+	#[inline]
+	/// # Filtered via Callback.
+	///
+	/// Define a custom filter callback to determine whether or not a given
+	/// file path should be yielded. Return `true` to keep it, `false` to
+	/// reject it.
+	///
+	/// ## Examples
+	///
+	/// ```ignore
+	/// use dowser::Dowser;
+	/// use std::convert::TryFrom;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Vec::<PathBuf>::try_from(
+	///     Dowser::filtered(|p: &Path| { ... }).with_path("/my/dir")
+	/// ).expect("No files were found.");
+	/// ```
+	pub fn filtered<F>(cb: F) -> Self
+	where F: Fn(&Path) -> bool + 'static + Send + Sync {
+		Self {
+			cb: Box::new(cb),
+			..Self::default()
+		}
+	}
+
+	#[cfg(feature = "regexp")]
+	#[inline]
+	/// # Filtered via Regex.
+	///
+	/// This is a convenience method for filtering files by regular expression.
+	/// You supply only the expression, and [`Dowser`] will test it against
+	/// the (full) path as a byte string, keeping any matches, rejecting the
+	/// rest.
+	///
+	/// This method is only available when the `regexp` crate feature is
+	/// enabled. This pulls down the [`regex`](https://crates.io/crates/regex) crate to handle the details.
+	///
+	/// Speaking of, see [here](https://docs.rs/regex/1.4.3/regex/#syntax) for syntax reference and other details.
+	///
+	/// ## Panics
+	///
+	/// This method will panic if the regular expression is malformed.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::convert::TryFrom;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Vec::<PathBuf>::try_from(
+	///     Dowser::regex(r"(?i)[^/]+\.jpe?g$").with_path("/my/dir")
+	/// ).expect("No files were found.");
+	/// ```
+	pub fn regex<R>(reg: R) -> Self
+	where R: std::borrow::Borrow<str> {
+		use regex::bytes::Regex;
+
+		let pat: Regex = Regex::new(reg.borrow()).expect("Invalid Regex.");
+		Self {
+			cb: Box::new(move|p: &Path| pat.is_match(crate::utility::path_as_bytes(p))),
+			..Self::default()
+		}
+	}
+}
+
+/// # Adding Path(s).
+impl Dowser {
+	/// # With Paths.
+	///
+	/// Append files and/or directories to the finder. File paths will be
+	/// checked against the filter callback (if any) and added straight to the
+	/// results if they pass (i.e. immediately). Directories will be queued for
+	/// later scanning (i.e. during collection).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::convert::TryFrom;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Vec::<PathBuf>::try_from(
+	///     Dowser::default().with_paths(&["/my/dir"])
+	/// ).expect("No files were found.");
+	/// ```
+	pub fn with_paths<P, I>(self, paths: I) -> Self
+	where
+		P: AsRef<Path>,
+		I: IntoIterator<Item=P> {
+		paths.into_iter().fold(self, Self::with_path)
+	}
+
+	/// # With Path.
+	///
+	/// Add a path to the finder. If the path is a file, it will be checked
+	/// against the filter callback (if any) before being added to the results.
+	/// If it is a directory, it will be queued for later scanning (i.e. during
+	/// collection).
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::convert::TryFrom;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Vec::<PathBuf>::try_from(
+	///     Dowser::default().with_path("/my/dir")
+	/// ).expect("No files were found.");
+	/// ```
+	pub fn with_path<P>(mut self, path: P) -> Self
+	where P: AsRef<Path> {
+		if let Some((h, is_dir, p)) = resolve_path(PathBuf::from(path.as_ref()), false) {
+			if self.seen.insert(h) {
+				if is_dir {
+					if let Ok(rd) = fs::read_dir(p) {
+						self.dirs.push(rd);
+					}
+				}
+				else if (self.cb)(&p) {
+					self.files.push(p);
+				}
+			}
+		}
+
+		self
 	}
 }
 
@@ -316,9 +348,9 @@ mod tests {
 		let abs_perr = abs_dir.with_file_name("foo.bar");
 
 		// Do a non-search search.
-		let mut w1 = Dowser::default()
-			.with_path(PathBuf::from("tests/"))
-			.build();
+		let mut w1 = Vec::<PathBuf>::try_from(
+			Dowser::default().with_path(PathBuf::from("tests/"))
+		).expect("Missing tests/ directory.");
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 9);
 		assert!(w1.contains(&abs_p1));
@@ -328,10 +360,9 @@ mod tests {
 		#[cfg(feature = "regexp")]
 		{
 			// Look only for .txt files.
-			w1 = Dowser::default()
-				.with_regex(r"(?i)\.txt$")
-				.with_paths(&[PathBuf::from("tests/")])
-				.build();
+			w1 = Vec::<PathBuf>::try_from(
+				Dowser::regex(r"(?i)\.txt$").with_path(PathBuf::from("tests/"))
+			).expect("Missing tests/ directory.");
 			assert!(! w1.is_empty());
 			assert_eq!(w1.len(), 1);
 			assert!(w1.contains(&abs_p1));
@@ -339,27 +370,23 @@ mod tests {
 			assert!(! w1.contains(&abs_perr));
 
 			// Look for something that doesn't exist.
-			w1 = Dowser::default()
-				.with_regex(r"(?i)\.exe$")
-				.with_path(PathBuf::from("tests/"))
-				.build();
-			assert!(w1.is_empty());
-			assert_eq!(w1.len(), 0);
-			assert!(! w1.contains(&abs_p1));
-			assert!(! w1.contains(&abs_p2));
-			assert!(! w1.contains(&abs_perr));
+			assert!(
+				Vec::<PathBuf>::try_from(
+					Dowser::regex(r"(?i)\.exe$").with_path(PathBuf::from("tests/"))
+				).is_err()
+			);
 		}
 
-		// One Extension.
-		w1 = Dowser::default()
-			.with_path(PathBuf::from("tests/"))
-			.with_filter(|p: &Path| p.extension()
+		// Filtered search.
+		w1 = Vec::<PathBuf>::try_from(
+			Dowser::filtered(|p: &Path| p.extension()
 				.map_or(
 					false,
 					|e| e.as_bytes().eq_ignore_ascii_case(b"txt")
 				)
 			)
-			.build();
+			.with_path(PathBuf::from("tests/"))
+		).expect("Missing /tests directory.");
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 1);
 	}

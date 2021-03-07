@@ -10,7 +10,11 @@ use dowser::{
 	dowse,
 	Dowser,
 };
-use std::time::Duration;
+use std::{
+	convert::TryFrom,
+	path::PathBuf,
+	time::Duration,
+};
 
 benches!(
 	Bench::new("dowser", "dowse(/usr/share)")
@@ -18,6 +22,6 @@ benches!(
 		.with(|| dowse(&["/usr/share"])),
 
 	Bench::new("dowser::Dowser", "with_path(/usr/share)")
-		.timed(Duration::from_secs(5))
-		.with(|| Dowser::default().with_path("/usr/share").build())
+		.timed(Duration::from_secs(6))
+		.with(|| Vec::<PathBuf>::try_from(Dowser::default().with_path("/usr/share")))
 );

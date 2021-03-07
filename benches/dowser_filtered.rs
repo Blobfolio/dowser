@@ -8,8 +8,12 @@ use brunch::{
 };
 use dowser::Dowser;
 use std::{
+	convert::TryFrom,
 	os::unix::ffi::OsStrExt,
-	path::Path,
+	path::{
+		Path,
+		PathBuf,
+	}
 };
 
 /// # Filter Callback.
@@ -23,15 +27,21 @@ fn cb(path: &Path) -> bool {
 
 #[cfg(feature = "regexp")]
 benches!(
-	Bench::new("dowser::Dowser", "with_filter(.gz)")
-		.with(|| Dowser::default().with_filter(cb).with_path("/usr/share/man").build()),
+	Bench::new("dowser::Dowser", "filtered(.gz)")
+		.with(|| Vec::<PathBuf>::try_from(
+			Dowser::filtered(cb).with_path("/usr/share/man")
+		)),
 
-	Bench::new("dowser::Dowser", "with_regex(.gz)")
-		.with(|| Dowser::default().with_regex(r"(?i).+\.gz$").with_path("/usr/share/man").build())
+	Bench::new("dowser::Dowser", "regex(.gz)")
+		.with(|| Vec::<PathBuf>::try_from(
+			Dowser::regex(r"(?i).+\.gz$").with_path("/usr/share/man")
+		))
 );
 
 #[cfg(not(feature = "regexp"))]
 benches!(
-	Bench::new("dowser::Dowser", "with_filter(.gz)")
-		.with(|| Dowser::default().with_filter(cb).with_path("/usr/share/man").build())
+	Bench::new("dowser::Dowser", "filtered(.gz)")
+		.with(|| Vec::<PathBuf>::try_from(
+			Dowser::filtered(cb).with_path("/usr/share/man")
+		))
 );
