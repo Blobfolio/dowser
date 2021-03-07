@@ -124,6 +124,7 @@ pub struct Dowser {
 }
 
 impl Default for Dowser {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			dirs: Vec::new(),
@@ -269,6 +270,7 @@ impl Dowser {
 
 /// # Adding Path(s).
 impl Dowser {
+	#[inline]
 	/// # With Paths.
 	///
 	/// Append files and/or directories to the finder. File paths will be
