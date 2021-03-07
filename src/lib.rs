@@ -14,7 +14,7 @@ If those things sound nice, this library might be a good fit.
 
 On the other hand, [`Dowser`] is optimized for just one particular type of searching:
 
- * Aside from [`Dowser::with_filter`] and [`Dowser::with_regex`], there is no way to alter its traversal behaviors;
+ * File paths can be filtered via [`Dowser::filtered`] or [`Dowser::regex`], but directory paths cannot;
  * There are no settings for things like min/max depth, directory filtering, etc.;
  * It only returns *file* paths. Directories are crawled, but not returned in the set;
  * File uniqueness hashing relies on Unix metadata; **this library is not compatible with Windows**;
@@ -27,9 +27,9 @@ Depending on your needs, those limitations could be bad, in which case something
 
 Add `dowser` to your `dependencies` in `Cargo.toml`, like:
 
-```
+```ignore
 [dependencies]
-dowser = "0.1.*"
+dowser = "0.2.*"
 ```
 
 
@@ -38,13 +38,13 @@ dowser = "0.1.*"
 
 | Feature | Description |
 | ------- | ----------- |
-| `regexp` | Enable the [`Dowser::with_regex`] method, which allows for matching file paths (as bytes) against a regular expression. |
+| `regexp` | Enable the [`Dowser::regex`] method, which allows for matching file paths (as bytes) against a regular expression. |
 
 To use this feature, alter the `Cargo.toml` bit to read:
 
-```
+```ignore
 [dependencies.dowser]
-version = "0.1.*"
+version = "0.2.*"
 features = [ "regexp" ]
 ```
 
@@ -61,51 +61,43 @@ let paths = [ "/path/one", "/path/two", "/path/three" ];
 let files: Vec<PathBuf> = dowser::dowse(&paths);
 ```
 
-If you need to load starting paths multiple times, or want to filter the results, you can use the full [`Dowser`] struct instead. It follows a basic builder pattern, so you can just chain your way to an answer:
+If you want to filter files or need to add path(s) to the crawl list multiple times, initialize a [`Dowser`] object with one of the following three methods:
+
+ * [`Dowser::default`]: Return all files without prejudice.
+ * [`Dowser::filtered`]: Filter file paths via the provided callback.
+ * [`Dowser::regex`]: Filter file paths via regular express. (This requires enabling the `regexp` crate feature.)
+
+From there, add one or more file or directory paths using the [`Dowser::with_path`] and [`Dowser::with_paths`] methods.
+
+Finally, collect the results with `Vec::<PathBuf>::try_from()`. If no files are found, an error is returned, otherwise the matching file paths are collected into a vector.
 
 ```rust
 use dowser::Dowser;
-use std::{
-    os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
-};
+use std::convert::TryFrom;
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 
 // Return all files under "/usr/share/man".
-let res: Vec<PathBuf> = Dowser::default()
-    .with_path("/usr/share/man")
-    .build();
+let files = Vec::<PathBuf>::try_from(
+   Dowser::default().with_path("/usr/share/man")
+).expect("No files were found.");
 
-// Return only Gzipped files, using a regular expression.
-// This requires the "regexp" feature.
-let res: Vec<PathBuf> = Dowser::default()
-    .with_regex(r"(?i)[^/]+\.gz$")
-    .with_path("/usr/share/man")
-    .build();
+// Return only Gzipped files using regular expression.
+let files = Vec::<PathBuf>::try_from(
+    Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
+).expect("No files were found.");
 
-// The same thing, done manually.
-let res: Vec<PathBuf> = Dowser::default()
-    .with_filter(|p: &Path| p.extension()
+// Return only Gzipped files using callback filter.
+let files = Vec::<PathBuf>::try_from(
+    Dowser::filtered(|p: &Path| p.extension()
         .map_or(
             false,
             |e| e.as_bytes().eq_ignore_ascii_case(b"gz")
         )
     )
     .with_path("/usr/share/man")
-    .build();
+).expect("No files were found.");
 ```
-
-If you want to easily bubble an error in cases where no files are found, you can use the [`std::convert::TryFrom`] trait (instead of calling [`Dowser::build`]), like:
-
-```rust
-use dowser::Dowser;
-use std::convert::TryFrom;
-
-let out = Vec::<PathBuf>::try_from(
-    Dowser::default().with_path("/usr/share/man")
-)
-    .map_err(|_| YourErrorHere)?;
-```
-
 */
 
 #![warn(clippy::filetype_is_file)]
@@ -128,13 +120,7 @@ let out = Vec::<PathBuf>::try_from(
 #![warn(unused_extern_crates)]
 #![warn(unused_import_braces)]
 
-#![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_ptr_alignment)]
-#![allow(clippy::cast_sign_loss)]
-#![allow(clippy::map_err_ignore)]
-#![allow(clippy::missing_errors_doc)]
-#![allow(clippy::module_name_repetitions)]
+#![allow(clippy::module_name_repetitions)] // This is fine.
 
 
 
@@ -144,7 +130,10 @@ mod hash;
 pub mod utility;
 
 pub use dowse::dowse;
-pub use dowser::Dowser;
+pub use self::dowser::{
+    Dowser,
+    DowserError,
+};
 
 #[doc(hidden)]
 pub(crate) use hash::{

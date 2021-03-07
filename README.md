@@ -13,7 +13,7 @@ If those things sound nice, this library might be a good fit.
 
 On the other hand, [`Dowser`] is optimized for just one particular type of searching:
 
- * Aside from [`Dowser::with_filter`] and [`Dowser::with_regex`], there is no way to alter its traversal behaviors;
+ * File paths can be filtered via [`Dowser::filtered`] or [`Dowser::regex`], but directory paths cannot;
  * There are no settings for things like min/max depth, directory filtering, etc.;
  * It only returns *file* paths. Directories are crawled, but not returned in the set;
  * File uniqueness hashing relies on Unix metadata; **this library is not compatible with Windows**;
@@ -28,7 +28,7 @@ Add `dowser` to your `dependencies` in `Cargo.toml`, like:
 
 ```
 [dependencies]
-dowser = "0.1.*"
+dowser = "0.2.*"
 ```
 
 
@@ -37,13 +37,13 @@ dowser = "0.1.*"
 
 | Feature | Description |
 | ------- | ----------- |
-| `regexp` | Enable the [`Dowser::with_regex`] method, which allows for matching file paths (as bytes) against a regular expression. |
+| `regexp` | Enable the [`Dowser::regex`] method, which allows for matching file paths (as bytes) against a regular expression. |
 
 To use this feature, alter the `Cargo.toml` bit to read:
 
 ```
 [dependencies.dowser]
-version = "0.1.*"
+version = "0.2.*"
 features = [ "regexp" ]
 ```
 
@@ -51,7 +51,7 @@ features = [ "regexp" ]
 
 ## Example
 
-This crate comes with two ways to find files. If you already have the full list of starting path(s) and just want *all the files* that exist under them, use the [`dowse`] method:
+This crate comes with two ways to find files. If you already have the full list of starting path(s) and just want *all the files* that exist under them, use the [`dowse`](self::dowse()) method:
 
 ```rust
 use std::path::PathBuf;
@@ -60,49 +60,42 @@ let paths = [ "/path/one", "/path/two", "/path/three" ];
 let files: Vec<PathBuf> = dowser::dowse(&paths);
 ```
 
-If you need to load starting paths multiple times, or want to filter the results, you can use the full [`Dowser`] struct instead. It follows a basic builder pattern, so you can just chain your way to an answer:
+If you want to filter files or need to add path(s) to the crawl list multiple times, initialize a [`Dowser`] object with one of the following three methods:
 
-```rust
-use dowser::Dowser;
-use std::{
-    os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
-};
+ * [`Dowser::default`]: Return all files without prejudice.
+ * [`Dowser::filtered`]: Filter file paths via the provided callback.
+ * [`Dowser::regex`]: Filter file paths via regular express. (This requires enabling the `regexp` crate feature.)
 
-// Return all files under "/usr/share/man".
-let res: Vec<PathBuf> = Dowser::default()
-    .with_path("/usr/share/man")
-    .build();
+From there, add one or more file or directory paths using the [`Dowser::with_path`] and [`Dowser::with_paths`] methods.
 
-// Return only Gzipped files, using a regular expression.
-// This requires the "regexp" feature.
-let res: Vec<PathBuf> = Dowser::default()
-    .with_regex(r"(?i)[^/]+\.gz$") // Filter before adding paths!
-    .with_path("/usr/share/man")
-    .build();
-
-// The same thing, done manually.
-let res: Vec<PathBuf> = Dowser::default()
-    .with_filter(|p: &Path| p.extension()
-        .map_or(
-            false,
-            |e| e.as_bytes().eq_ignore_ascii_case(b"gz")
-        )
-    ) // Again, filter before adding paths!
-    .with_path("/usr/share/man")
-    .build();
-```
-
-If you want to easily bubble an error in cases where no files are found, you can use the [`std::convert::TryFrom`] trait (instead of calling [`Dowser::build`]), like:
+Finally, collect the results with `Vec::<PathBuf>::try_from()`. If no files are found, an error is returned, otherwise the matching file paths are collected into a vector.
 
 ```rust
 use dowser::Dowser;
 use std::convert::TryFrom;
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 
-let out = Vec::<PathBuf>::try_from(
-    Dowser::default().with_path("/usr/share/man")
-)
-    .map_err(|_| YourErrorHere)?;
+// Return all files under "/usr/share/man".
+let files = Vec::<PathBuf>::try_from(
+   Dowser::default().with_path("/usr/share/man")
+).expect("No files were found.");
+
+// Return only Gzipped files using regular expression.
+let files = Vec::<PathBuf>::try_from(
+    Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
+).expect("No files were found.");
+
+// Return only Gzipped files using callback filter.
+let files = Vec::<PathBuf>::try_from(
+    Dowser::filtered(|p: &Path| p.extension()
+        .map_or(
+            false,
+            |e| e.as_bytes().eq_ignore_ascii_case(b"gz")
+        )
+    )
+    .with_path("/usr/share/man")
+).expect("No files were found.");
 ```
 
 
