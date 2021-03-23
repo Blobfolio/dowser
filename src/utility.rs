@@ -128,8 +128,8 @@ mod tests {
 			test_dir.join("02"),
 			test_dir.join("03"),
 			test_dir.join("04"),
-			test_dir.join("05"),
-			test_dir.join("06"),
+			test_dir.join("05"), // Directory.
+			test_dir.join("06"), // Directory.
 			test_dir.join("07"), // Sym to six.
 			test_dir.join("06/08"),
 			test_dir.join("06/09"),
@@ -147,7 +147,7 @@ mod tests {
 
 		// There should be two fewer entries as two are symlinks.
 		assert_eq!(raw.len(), 10);
-		assert_eq!(canon.len(), 8);
+		assert_eq!(canon.len(), 8, "{:?}", canon);
 		assert!(! canon.contains(&raw[6]));
 		assert!(! canon.contains(&raw[9]));
 
