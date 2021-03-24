@@ -128,12 +128,10 @@ test:
 	clear
 
 	RUST_TEST_THREADS=1 cargo test \
-		--tests \
 		--release \
 		--all-features \
 		--target x86_64-unknown-linux-gnu \
-		--target-dir "{{ cargo_dir }}" -- \
-			--format terse
+		--target-dir "{{ cargo_dir }}"
 
 	exit 0
 
