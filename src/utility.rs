@@ -34,13 +34,11 @@ where P: AsRef<Path>, I: IntoParallelIterator<Item=P> {
 		.sum()
 }
 
-#[allow(trivial_casts)] // We need triviality!
 #[must_use]
 #[inline]
 /// # Path to Bytes.
 ///
-/// Like it says; convert an `&Path` to an `&[u8]`. This is achieved through
-/// pointer recasting, the same way [`std::path::PathBuf`] manages it.
+/// Like it says; convert an `&Path` to an `&[u8]`.
 ///
 /// ## Examples
 ///
@@ -49,7 +47,8 @@ where P: AsRef<Path>, I: IntoParallelIterator<Item=P> {
 /// let path = dowser::utility::path_as_bytes(&PathBuf::from("/path/to/file.jpg"));
 /// ```
 pub fn path_as_bytes(p: &Path) -> &[u8] {
-	unsafe { &*(p.as_os_str() as *const std::ffi::OsStr as *const [u8]) }
+	use std::os::unix::ffi::OsStrExt;
+	p.as_os_str().as_bytes()
 }
 
 #[doc(hidden)]
