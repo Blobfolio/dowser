@@ -81,7 +81,7 @@ use std::{
 ///
 /// paths.iter()
 ///     .filter(|p| p.extension()
-///         .map_or(false, |e| e.as_bytes().to_ascii_lowercase() == b"png")
+///         .map_or(false, |e| e.as_bytes().eq_ignore_ascii_case(b"png"))
 ///     )
 ///     .for_each(|p| todo!());
 /// ```
