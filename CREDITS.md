@@ -481,7 +481,7 @@ SOFTWARE.
 
 **Used By:**
 
-* [dowser 0.2.1](https://github.com/Blobfolio/dowser)
+* [dowser 0.2.2](https://github.com/Blobfolio/dowser)
 
 
 ```

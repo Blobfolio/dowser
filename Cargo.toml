@@ -1,6 +1,6 @@
 [package]
 name = "dowser"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "A multi-threaded, recursive file finding library for Unix."
@@ -41,6 +41,10 @@ harness = false
 
 [[bench]]
 name = "dowser_filtered"
+harness = false
+
+[[bench]]
+name = "extension"
 harness = false
 
 [features]

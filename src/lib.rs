@@ -124,6 +124,7 @@ let files = Vec::<PathBuf>::try_from(
 
 
 
+mod ext;
 mod dowse;
 mod dowser;
 mod hash;
@@ -134,6 +135,7 @@ pub use self::dowser::{
     Dowser,
     DowserError,
 };
+pub use ext::Extension;
 
 #[doc(hidden)]
 pub(crate) use hash::{
