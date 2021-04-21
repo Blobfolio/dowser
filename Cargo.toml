@@ -43,6 +43,10 @@ harness = false
 name = "dowser_filtered"
 harness = false
 
+[[bench]]
+name = "extension"
+harness = false
+
 [features]
 # Enable Regex matching in Dowser.
 regexp = [ "regex" ]

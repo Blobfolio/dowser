@@ -2,10 +2,12 @@
 # Dowser: Filtered Find
 */
 
-use dowser::Dowser;
+use dowser::{
+	Dowser,
+	Extension,
+};
 use std::{
 	convert::TryFrom,
-	os::unix::ffi::OsStrExt,
 	path::{
 		Path,
 		PathBuf,
@@ -14,14 +16,11 @@ use std::{
 
 /// Do it.
 fn main() {
+	const EXT: Extension = Extension::new2(*b"gz");
+
 	// Search for gzipped MAN pages.
 	let files = Vec::<PathBuf>::try_from(
-		Dowser::filtered(|p: &Path| p.extension()
-			.map_or(
-				false,
-				|e| e.as_bytes().eq_ignore_ascii_case(b"gz")
-			)
-		)
+		Dowser::filtered(|p: &Path| Extension::try_from2(p).map_or(false, |p| p == EXT))
 		.with_path("/usr/share/man")
 	).expect("No files were found.");
 
