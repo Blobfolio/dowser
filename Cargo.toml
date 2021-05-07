@@ -1,6 +1,6 @@
 [package]
 name = "dowser"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2018"
 description = "A multi-threaded, recursive file finding library for Unix."
@@ -29,7 +29,7 @@ ahash = "0.7.*"
 rayon = "1.5.*"
 
 [dependencies.regex]
-version = "1.4.*"
+version = "1.5.*"
 optional = true
 
 [dev-dependencies]
