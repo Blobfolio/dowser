@@ -117,6 +117,33 @@ pub enum Extension {
 	Ext4(u32),
 }
 
+impl<P> PartialEq<P> for Extension
+where P: AsRef<Path> {
+	/// # Path Equality.
+	///
+	/// When there's just one extension and one path to check, you can compare
+	/// them directly (extension first).
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// const MY_EXT: Extension = Extension::new4(*b"html");
+	///
+	/// assert_eq!(MY_EXT, "/path/to/index.html");
+	/// assert_ne!(MY_EXT, "/path/to/image.jpeg");
+	/// ```
+	fn eq(&self, other: &P) -> bool {
+		match self {
+			Self::Ext2(_) => Self::try_from2(other),
+			Self::Ext3(_) => Self::try_from3(other),
+			Self::Ext4(_) => Self::try_from4(other),
+		}
+			.map_or(false, |e| e.eq(self))
+	}
+}
+
 /// # Unchecked Instantiation.
 impl Extension {
 	#[must_use]
