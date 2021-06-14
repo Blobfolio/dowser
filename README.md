@@ -2,6 +2,7 @@
 
 [![Documentation](https://docs.rs/dowser/badge.svg)](https://docs.rs/dowser/)
 [![crates.io](https://img.shields.io/crates/v/dowser.svg)](https://crates.io/crates/dowser)
+[![Build Status](https://github.com/Blobfolio/dowser/workflows/Build/badge.svg)](https://github.com/Blobfolio/dowser/actions)
 
 [`Dowser`] is a(nother) fast, multi-threaded, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
 
