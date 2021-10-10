@@ -73,7 +73,6 @@ Finally, collect the results with `Vec::<PathBuf>::try_from()`. If no files are 
 
 ```rust
 use dowser::Dowser;
-use std::convert::TryFrom;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 

@@ -7,7 +7,6 @@ use dowser::{
 	Extension,
 };
 use std::{
-	convert::TryFrom,
 	path::{
 		Path,
 		PathBuf,

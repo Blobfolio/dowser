@@ -8,7 +8,6 @@ use brunch::{
 };
 use dowser::Dowser;
 use std::{
-	convert::TryFrom,
 	os::unix::ffi::OsStrExt,
 	path::{
 		Path,

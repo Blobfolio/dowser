@@ -11,7 +11,6 @@ use dowser::{
 	Dowser,
 };
 use std::{
-	convert::TryFrom,
 	path::PathBuf,
 	time::Duration,
 };
