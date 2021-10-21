@@ -17,7 +17,6 @@ use rayon::iter::{
 };
 use std::{
 	collections::HashSet,
-	convert::TryFrom,
 	fmt,
 	fs::{
 		self,
@@ -87,7 +86,6 @@ impl DowserError {
 ///
 /// ```no_run
 /// use dowser::Dowser;
-/// use std::convert::TryFrom;
 /// use std::os::unix::ffi::OsStrExt;
 /// use std::path::{Path, PathBuf};
 ///
@@ -151,7 +149,6 @@ impl TryFrom<Dowser> for Vec<PathBuf> {
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::convert::TryFrom;
 	/// use std::path::PathBuf;
 	///
 	/// let files = Vec::<PathBuf>::try_from(
@@ -212,7 +209,6 @@ impl Dowser {
 	///
 	/// ```ignore
 	/// use dowser::Dowser;
-	/// use std::convert::TryFrom;
 	/// use std::path::PathBuf;
 	///
 	/// let files = Vec::<PathBuf>::try_from(
@@ -249,7 +245,6 @@ impl Dowser {
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::convert::TryFrom;
 	/// use std::path::PathBuf;
 	///
 	/// let files = Vec::<PathBuf>::try_from(
@@ -282,7 +277,6 @@ impl Dowser {
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::convert::TryFrom;
 	/// use std::path::PathBuf;
 	///
 	/// let files = Vec::<PathBuf>::try_from(
@@ -307,7 +301,6 @@ impl Dowser {
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::convert::TryFrom;
 	/// use std::path::PathBuf;
 	///
 	/// let files = Vec::<PathBuf>::try_from(

@@ -29,7 +29,7 @@ Add `dowser` to your `dependencies` in `Cargo.toml`, like:
 
 ```ignore
 [dependencies]
-dowser = "0.2.*"
+dowser = "0.3.*"
 ```
 
 
@@ -44,7 +44,7 @@ To use this feature, alter the `Cargo.toml` bit to read:
 
 ```ignore
 [dependencies.dowser]
-version = "0.2.*"
+version = "0.3.*"
 features = [ "regexp" ]
 ```
 
@@ -73,7 +73,6 @@ Finally, collect the results with `Vec::<PathBuf>::try_from()`. If no files are 
 
 ```rust
 use dowser::Dowser;
-use std::convert::TryFrom;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 

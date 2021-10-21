@@ -1,8 +1,9 @@
 [package]
 name = "dowser"
-version = "0.2.4"
+version = "0.3.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 description = "A multi-threaded, recursive file finding library for Unix."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/dowser"
@@ -22,7 +23,7 @@ exclude = [
 [package.metadata.docs.rs]
 features = [ "regexp" ]
 default-target = "x86_64-unknown-linux-gnu"
-targets = [ "x86_64-unknown-linux-gnu" ]
+targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
 [dependencies]
 ahash = "0.7.*"
@@ -33,7 +34,7 @@ version = "1.5.*"
 optional = true
 
 [dev-dependencies]
-brunch = "0.1.*"
+brunch = "0.2.*"
 
 [[bench]]
 name = "dowser"
