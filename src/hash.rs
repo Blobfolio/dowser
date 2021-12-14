@@ -28,10 +28,10 @@ impl BuildHasher for NoHashState {
 /// # Passthrough Hash.
 ///
 /// This is a non-hashing hash for `u64` sets that uses `self` as the hash.
-/// It is used by [`Dowser`] and [`dowse`] to track visited paths, which are
-/// stored as pre-calculated `u64` hashes. (The set needs neither the inputs
-/// nor the paths; it just needs to know whether or not a new path has already
-/// been seen.)
+/// It is used by [`Dowser`] to track visited paths, which are stored as
+/// pre-calculated `u64` hashes. (The set needs neither the inputs nor the
+/// paths; it just needs to know whether or not a new path has already been
+/// seen.)
 pub(super) struct NoHashU64(u64);
 
 impl Hasher for NoHashU64 {

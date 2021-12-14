@@ -54,8 +54,8 @@ pub fn path_as_bytes(p: &Path) -> &[u8] {
 #[doc(hidden)]
 /// # Resolve `DirEntry`.
 ///
-/// This is a convenience callback for [`Dowser`] and [`dowse`] used
-/// during `ReadDir` traversal.
+/// This is a convenience callback for [`Dowser`] used during `ReadDir`
+/// traversal.
 ///
 /// See [`resolve_path`] for more information.
 pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>) -> Option<(u64, bool, PathBuf)> {
