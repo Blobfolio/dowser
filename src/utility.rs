@@ -82,19 +82,18 @@ pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>
 pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, PathBuf)> {
 	use std::os::unix::fs::MetadataExt;
 
-	let meta = std::fs::metadata(&path).ok()?;
-	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
-	let dir: bool = meta.is_dir();
-
 	if trusted {
 		let meta = std::fs::symlink_metadata(&path).ok()?;
 		if ! meta.file_type().is_symlink() {
-			return Some((hash, dir, path));
+			let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+			return Some((hash, meta.is_dir(), path));
 		}
 	}
 
 	let path = std::fs::canonicalize(path).ok()?;
-	Some((hash, dir, path))
+	let meta = std::fs::metadata(&path).ok()?;
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	Some((hash, meta.is_dir(), path))
 }
 
 
