@@ -3,6 +3,7 @@
 [![Documentation](https://docs.rs/dowser/badge.svg)](https://docs.rs/dowser/)
 [![crates.io](https://img.shields.io/crates/v/dowser.svg)](https://crates.io/crates/dowser)
 [![Build Status](https://github.com/Blobfolio/dowser/workflows/Build/badge.svg)](https://github.com/Blobfolio/dowser/actions)
+[![Dependency Status](https://deps.rs/repo/github/blobfolio/dowser/status.svg)](https://deps.rs/repo/github/blobfolio/dowser)
 
 [`Dowser`] is a(nother) fast, multi-threaded, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
 
@@ -52,20 +53,11 @@ features = [ "regexp" ]
 
 ## Example
 
-This crate comes with two ways to find files. If you already have the full list of starting path(s) and just want *all the files* that exist under them, use the [`dowse`](self::dowse()) method:
-
-```rust
-use std::path::PathBuf;
-
-let paths = [ "/path/one", "/path/two", "/path/three" ];
-let files: Vec<PathBuf> = dowser::dowse(&paths);
-```
-
 If you want to filter files or need to add path(s) to the crawl list multiple times, initialize a [`Dowser`] object with one of the following three methods:
 
- * [`Dowser::default`]: Return all files without prejudice.
- * [`Dowser::filtered`]: Filter file paths via the provided callback.
- * [`Dowser::regex`]: Filter file paths via regular express. (This requires enabling the `regexp` crate feature.)
+ * [`Dowser::default`] Return all files without prejudice.
+ * [`Dowser::filtered`] Filter file paths via the provided callback.
+ * [`Dowser::regex`] Filter file paths via regular express. (This requires enabling the `regexp` crate feature.)
 
 From there, add one or more file or directory paths using the [`Dowser::with_path`] and [`Dowser::with_paths`] methods.
 
@@ -73,7 +65,6 @@ Finally, collect the results with `Vec::<PathBuf>::try_from()`. If no files are 
 
 ```rust
 use dowser::Dowser;
-use std::convert::TryFrom;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 

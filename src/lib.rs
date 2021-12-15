@@ -52,20 +52,11 @@ features = [ "regexp" ]
 
 ## Example
 
-This crate comes with two ways to find files. If you already have the full list of starting path(s) and just want *all the files* that exist under them, use the [`dowse`](self::dowse()) method:
-
-```rust
-use std::path::PathBuf;
-
-let paths = [ "/path/one", "/path/two", "/path/three" ];
-let files: Vec<PathBuf> = dowser::dowse(&paths);
-```
-
 If you want to filter files or need to add path(s) to the crawl list multiple times, initialize a [`Dowser`] object with one of the following three methods:
 
- * [`Dowser::default`]: Return all files without prejudice.
- * [`Dowser::filtered`]: Filter file paths via the provided callback.
- * [`Dowser::regex`]: Filter file paths via regular express. (This requires enabling the `regexp` crate feature.)
+ * [`Dowser::default`] Return all files without prejudice.
+ * [`Dowser::filtered`] Filter file paths via the provided callback.
+ * [`Dowser::regex`] Filter file paths via regular express. (This requires enabling the `regexp` crate feature.)
 
 From there, add one or more file or directory paths using the [`Dowser::with_path`] and [`Dowser::with_paths`] methods.
 
@@ -99,6 +90,8 @@ let files = Vec::<PathBuf>::try_from(
 ```
 */
 
+#![forbid(unsafe_code)]
+
 #![warn(clippy::filetype_is_file)]
 #![warn(clippy::integer_division)]
 #![warn(clippy::needless_borrow)]
@@ -124,12 +117,12 @@ let files = Vec::<PathBuf>::try_from(
 
 
 mod ext;
-mod dowse;
 mod dowser;
 mod hash;
 pub mod utility;
 
-pub use dowse::dowse;
+
+
 pub use self::dowser::{
     Dowser,
     DowserError,
@@ -140,6 +133,11 @@ pub use ext::Extension;
 pub(crate) use hash::{
 	NoHashU64,
 	NoHashState,
+};
+
+use std::path::{
+    Path,
+    PathBuf,
 };
 
 
@@ -153,4 +151,35 @@ macro_rules! mutex_ptr {
 	($mutex:expr) => (
 		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 	);
+}
+
+
+
+#[must_use]
+#[deprecated(since = "0.3.1", note = "Prefer dowser::Dowser::default() for unfiltered file searching.")]
+/// # One-Shot.
+///
+/// If you don't need any complex filtering or empty-set errors, you can use
+/// this one-off method to return a vector of all files under the specified
+/// paths, if any.
+///
+/// ## Warning
+///
+/// The source paths are meant to be paths, _plural_. Pass an iterator,
+/// slice, or collection to it, _not_ a singular `Path`/`PathBuf`. If you only
+/// have a single path, throw it in a slice, like `dowse([val])`.
+///
+/// ## Examples
+///
+/// ```
+/// use std::path::PathBuf;
+///
+/// let files: Vec<PathBuf> = dowser::dowse(&["/path/to/directory"]);
+/// ```
+pub fn dowse<P, I>(paths: I) -> Vec<PathBuf>
+where
+	P: AsRef<Path>,
+	I: IntoIterator<Item=P> {
+	Vec::<PathBuf>::try_from(Dowser::default().with_paths(paths))
+		.unwrap_or_default()
 }
