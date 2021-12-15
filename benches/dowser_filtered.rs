@@ -9,10 +9,7 @@ use brunch::{
 use dowser::Dowser;
 use std::{
 	os::unix::ffi::OsStrExt,
-	path::{
-		Path,
-		PathBuf,
-	}
+	path::Path,
 };
 
 /// # Filter Callback.
@@ -27,20 +24,14 @@ fn cb(path: &Path) -> bool {
 #[cfg(feature = "regexp")]
 benches!(
 	Bench::new("dowser::Dowser", "filtered(.gz)")
-		.with(|| Vec::<PathBuf>::try_from(
-			Dowser::filtered(cb).with_path("/usr/share/man")
-		)),
+		.with(|| Dowser::filtered(cb).with_path("/usr/share/man").into_vec()),
 
 	Bench::new("dowser::Dowser", "regex(.gz)")
-		.with(|| Vec::<PathBuf>::try_from(
-			Dowser::regex(r"(?i).+\.gz$").with_path("/usr/share/man")
-		))
+		.with(|| Dowser::regex(r"(?i).+\.gz$").with_path("/usr/share/man").into_vec())
 );
 
 #[cfg(not(feature = "regexp"))]
 benches!(
 	Bench::new("dowser::Dowser", "filtered(.gz)")
-		.with(|| Vec::<PathBuf>::try_from(
-			Dowser::filtered(cb).with_path("/usr/share/man")
-		))
+		.with(|| Dowser::filtered(cb).with_path("/usr/share/man").into_vec())
 );

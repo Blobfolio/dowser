@@ -17,6 +17,10 @@ use rayon::iter::{
 };
 use std::{
 	collections::HashSet,
+	ffi::{
+		OsStr,
+		OsString,
+	},
 	fmt,
 	fs::{
 		self,
@@ -133,6 +137,104 @@ impl Default for Dowser {
 	}
 }
 
+/// # Helper: Impl From Owned `PathBuf` Collections.
+macro_rules! impl_from_owned {
+	($($ty:ty),+) => ($(
+		impl From<$ty> for Dowser {
+			fn from(src: $ty) -> Self {
+				let mut files = Vec::with_capacity(2048);
+				let mut seen = HashSet::with_capacity_and_hasher(2048, NoHashState);
+
+				let dirs = src.into_iter()
+					.filter_map(|p| resolve_path(p, false))
+					.filter_map(|(h, is_dir, p)|
+						if seen.insert(h) {
+							if is_dir {
+								if let Ok(rd) = fs::read_dir(p) {
+									Some(rd)
+								}
+								else { None }
+							}
+							else {
+								files.push(p);
+								None
+							}
+						}
+						else { None }
+					)
+					.collect();
+
+				Self {
+					dirs,
+					files,
+					seen,
+					..Self::default()
+				}
+			}
+		}
+	)+);
+
+	($($num:literal),+) => ($(
+		impl_from_owned!([PathBuf; $num]);
+	)+);
+}
+
+impl_from_owned!(Vec<PathBuf>, HashSet<PathBuf>);
+impl_from_owned!(
+	1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+	17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+);
+
+impl From<PathBuf> for Dowser {
+	fn from(src: PathBuf) -> Self {
+		let mut dirs = Vec::new();
+		let mut files = Vec::with_capacity(2048);
+		let mut seen = HashSet::with_capacity_and_hasher(2048, NoHashState);
+
+		if let Some((h, is_dir, p)) = resolve_path(src, false) {
+			if seen.insert(h) {
+				if is_dir {
+					if let Ok(rd) = fs::read_dir(p) {
+						dirs.push(rd);
+					}
+				}
+				else {
+					files.push(p);
+				}
+			}
+		}
+
+		Self {
+			dirs,
+			files,
+			seen,
+			..Self::default()
+		}
+	}
+}
+
+impl From<&PathBuf> for Dowser {
+	#[inline]
+	fn from(src: &PathBuf) -> Self { Self::from(src.clone()) }
+}
+
+impl From<&Path> for Dowser {
+	#[inline]
+	fn from(src: &Path) -> Self { Self::from(src.to_path_buf()) }
+}
+
+/// # Helper: Impl From `AsRef<Path>` Types.
+macro_rules! impl_from_as_path {
+	($($ty:ty),+) => ($(
+		impl From<$ty> for Dowser {
+			#[inline]
+			fn from(src: $ty) -> Self { Self::from(PathBuf::from(src)) }
+		}
+	)+);
+}
+
+impl_from_as_path!(&str, String, &String, &OsStr, OsString, &OsString);
+
 impl TryFrom<Dowser> for Vec<PathBuf> {
 	type Error = DowserError;
 
@@ -156,43 +258,9 @@ impl TryFrom<Dowser> for Vec<PathBuf> {
 	/// ).expect("No files were found.");
 	/// ```
 	fn try_from(src: Dowser) -> Result<Self, Self::Error> {
-		// We don't have to do anything!
-		if src.dirs.is_empty() {
-			if src.files.is_empty() { return Err(DowserError::NoFiles); }
-			return Ok(src.files);
-		}
-
-		// Break up the data.
-		let Dowser { mut dirs, files, seen, cb } = src;
-		let seen = Arc::from(Mutex::new(seen));
-		let files = Arc::from(Mutex::new(files));
-
-		// Process until we're our of directories.
-		loop {
-			dirs = dirs.par_drain(..)
-				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(resolve_dir_entry)
-				.filter_map(|(h, is_dir, p)|
-					if mutex_ptr!(seen).insert(h) {
-						if is_dir { fs::read_dir(p).ok() }
-						else {
-							if cb(&p) { mutex_ptr!(files).push(p); }
-							None
-						}
-					}
-					else { None }
-				)
-				.collect();
-
-			if dirs.is_empty() { break; }
-		}
-
-		// Unwrap and return.
-		Arc::<Mutex<Self>>::try_unwrap(files)
-			.ok()
-			.and_then(|x| x.into_inner().ok())
-			.filter(|x| ! x.is_empty())
-			.ok_or(DowserError::NoFiles)
+		let out = src.into_vec();
+		if out.is_empty() { Err(DowserError::NoFiles) }
+		else { Ok(out) }
 	}
 }
 
@@ -333,6 +401,64 @@ impl Dowser {
 	}
 }
 
+/// # Building.
+impl Dowser {
+	#[must_use]
+	/// # Into Vec.
+	///
+	/// Run the search and return a vector of file paths, if any.
+	///
+	/// If you want to ensure there _are_ files found, use
+	/// `Vec::<PathBuf>::try_from` instead. That does the same thing, but only
+	/// returns a vec if it is non-empty.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Dowser::default().with_path("/my/dir").into_vec();
+	/// ```
+	pub fn into_vec(self) -> Vec<PathBuf> {
+		// We don't have to do anything!
+		if self.dirs.is_empty() {
+			return self.files;
+		}
+
+		// Break up the data.
+		let Dowser { mut dirs, files, seen, cb } = self;
+		let seen = Arc::from(Mutex::new(seen));
+		let files = Arc::from(Mutex::new(files));
+
+		// Process until we're our of directories.
+		loop {
+			dirs = dirs.par_drain(..)
+				.flat_map(ParallelBridge::par_bridge)
+				.filter_map(resolve_dir_entry)
+				.filter_map(|(h, is_dir, p)|
+					if mutex_ptr!(seen).insert(h) {
+						if is_dir { fs::read_dir(p).ok() }
+						else {
+							if cb(&p) { mutex_ptr!(files).push(p); }
+							None
+						}
+					}
+					else { None }
+				)
+				.collect();
+
+			if dirs.is_empty() { break; }
+		}
+
+		// Unwrap and return.
+		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
+			.ok()
+			.and_then(|x| x.into_inner().ok())
+			.unwrap_or_default()
+	}
+}
+
 
 
 #[cfg(test)]
@@ -391,5 +517,28 @@ mod tests {
 		).expect("Missing /tests directory.");
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 1);
+	}
+
+	#[test]
+	fn t_from() {
+		fn compare_vecs(a: &[PathBuf], b: &[PathBuf]) -> bool {
+			a.len() == b.len() &&
+			a.iter().all(|x| b.contains(x))
+		}
+
+		let normal = Dowser::default()
+			.with_path(PathBuf::from("tests/"))
+			.into_vec();
+
+		assert!(! normal.is_empty());
+
+		let from = Dowser::from("tests").into_vec();
+		assert!(compare_vecs(&normal, &from));
+
+		let from = Dowser::from(PathBuf::from("tests/")).into_vec();
+		assert!(compare_vecs(&normal, &from));
+
+		let from = Dowser::from(vec![PathBuf::from("tests/")]).into_vec();
+		assert!(compare_vecs(&normal, &from));
 	}
 }
