@@ -121,6 +121,8 @@ mod dowser;
 mod hash;
 pub mod utility;
 
+
+
 pub use self::dowser::{
     Dowser,
     DowserError,
@@ -131,6 +133,11 @@ pub use ext::Extension;
 pub(crate) use hash::{
 	NoHashU64,
 	NoHashState,
+};
+
+use std::path::{
+    Path,
+    PathBuf,
 };
 
 
@@ -144,4 +151,35 @@ macro_rules! mutex_ptr {
 	($mutex:expr) => (
 		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
 	);
+}
+
+
+
+#[must_use]
+#[deprecated(since = "0.3.1", note = "Prefer dowser::Dowser::default() for unfiltered file searching.")]
+/// # One-Shot.
+///
+/// If you don't need any complex filtering or empty-set errors, you can use
+/// this one-off method to return a vector of all files under the specified
+/// paths, if any.
+///
+/// ## Warning
+///
+/// The source paths are meant to be paths, _plural_. Pass an iterator,
+/// slice, or collection to it, _not_ a singular `Path`/`PathBuf`. If you only
+/// have a single path, throw it in a slice, like `dowse([val])`.
+///
+/// ## Examples
+///
+/// ```
+/// use std::path::PathBuf;
+///
+/// let files: Vec<PathBuf> = dowser::dowse(&["/path/to/directory"]);
+/// ```
+pub fn dowse<P, I>(paths: I) -> Vec<PathBuf>
+where
+	P: AsRef<Path>,
+	I: IntoIterator<Item=P> {
+	Vec::<PathBuf>::try_from(Dowser::default().with_paths(paths))
+		.unwrap_or_default()
 }

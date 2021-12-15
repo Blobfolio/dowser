@@ -273,6 +273,13 @@ impl Dowser {
 	/// results if they pass (i.e. immediately). Directories will be queued for
 	/// later scanning (i.e. during collection).
 	///
+	/// ## Warning
+	///
+	/// The source paths are meant to be paths, _plural_. Pass an iterator,
+	/// slice, or collection to it, _not_ a singular `Path`/`PathBuf`. If you
+	/// want to add a single path, use [`Dowser::with_path`] instead, or
+	/// enclose the value in a slice, like `with_paths([val])`.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
