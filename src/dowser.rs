@@ -156,43 +156,9 @@ impl TryFrom<Dowser> for Vec<PathBuf> {
 	/// ).expect("No files were found.");
 	/// ```
 	fn try_from(src: Dowser) -> Result<Self, Self::Error> {
-		// We don't have to do anything!
-		if src.dirs.is_empty() {
-			if src.files.is_empty() { return Err(DowserError::NoFiles); }
-			return Ok(src.files);
-		}
-
-		// Break up the data.
-		let Dowser { mut dirs, files, seen, cb } = src;
-		let seen = Arc::from(Mutex::new(seen));
-		let files = Arc::from(Mutex::new(files));
-
-		// Process until we're our of directories.
-		loop {
-			dirs = dirs.par_drain(..)
-				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(resolve_dir_entry)
-				.filter_map(|(h, is_dir, p)|
-					if mutex_ptr!(seen).insert(h) {
-						if is_dir { fs::read_dir(p).ok() }
-						else {
-							if cb(&p) { mutex_ptr!(files).push(p); }
-							None
-						}
-					}
-					else { None }
-				)
-				.collect();
-
-			if dirs.is_empty() { break; }
-		}
-
-		// Unwrap and return.
-		Arc::<Mutex<Self>>::try_unwrap(files)
-			.ok()
-			.and_then(|x| x.into_inner().ok())
-			.filter(|x| ! x.is_empty())
-			.ok_or(DowserError::NoFiles)
+		let out = src.into_vec();
+		if out.is_empty() { Err(DowserError::NoFiles) }
+		else { Ok(out) }
 	}
 }
 
@@ -330,6 +296,64 @@ impl Dowser {
 		}
 
 		self
+	}
+}
+
+/// # Building.
+impl Dowser {
+	#[must_use]
+	/// # Into Vec.
+	///
+	/// Run the search and return a vector of file paths, if any.
+	///
+	/// If you want to ensure there _are_ files found, use
+	/// `Vec::<PathBuf>::try_from` instead. That does the same thing, but only
+	/// returns a vec if it is non-empty.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Dowser::default().with_path("/my/dir").into_vec();
+	/// ```
+	pub fn into_vec(self) -> Vec<PathBuf> {
+		// We don't have to do anything!
+		if self.dirs.is_empty() {
+			return self.files;
+		}
+
+		// Break up the data.
+		let Dowser { mut dirs, files, seen, cb } = self;
+		let seen = Arc::from(Mutex::new(seen));
+		let files = Arc::from(Mutex::new(files));
+
+		// Process until we're our of directories.
+		loop {
+			dirs = dirs.par_drain(..)
+				.flat_map(ParallelBridge::par_bridge)
+				.filter_map(resolve_dir_entry)
+				.filter_map(|(h, is_dir, p)|
+					if mutex_ptr!(seen).insert(h) {
+						if is_dir { fs::read_dir(p).ok() }
+						else {
+							if cb(&p) { mutex_ptr!(files).push(p); }
+							None
+						}
+					}
+					else { None }
+				)
+				.collect();
+
+			if dirs.is_empty() { break; }
+		}
+
+		// Unwrap and return.
+		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
+			.ok()
+			.and_then(|x| x.into_inner().ok())
+			.unwrap_or_default()
 	}
 }
 
