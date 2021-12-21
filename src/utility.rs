@@ -96,6 +96,29 @@ pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, P
 	Some((hash, meta.is_dir(), path))
 }
 
+#[doc(hidden)]
+/// # Resolve Path Hash.
+///
+/// This is identical to `resolve_path`, except it only returns the hash. It
+/// is used by [`Dowser::without_paths`] and [`Dowser::without_path`], which
+/// don't actually need anything more.
+pub(crate) fn resolve_path_hash(path: PathBuf, trusted: bool) -> Option<u64> {
+	use std::os::unix::fs::MetadataExt;
+
+	if trusted {
+		let meta = std::fs::symlink_metadata(&path).ok()?;
+		if ! meta.file_type().is_symlink() {
+			let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+			return Some(hash);
+		}
+	}
+
+	let path = std::fs::canonicalize(path).ok()?;
+	let meta = std::fs::metadata(&path).ok()?;
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	Some(hash)
+}
+
 
 
 #[cfg(test)]
