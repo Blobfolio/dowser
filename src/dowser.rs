@@ -365,6 +365,38 @@ impl Dowser {
 		paths.into_iter().fold(self, Self::with_path)
 	}
 
+	/// # Without Paths.
+	///
+	/// This will prevent the provided directories or files from being crawled
+	/// or included in the output.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Vec::<PathBuf>::try_from(
+	///     Dowser::default()
+	///         .with_path("/my/dir")
+	///         .without_paths(&["/my/dir/ignore"])
+	/// ).expect("No files were found.");
+	/// ```
+	pub fn without_paths<P, I>(mut self, paths: I) -> Self
+	where
+		P: AsRef<Path>,
+		I: IntoIterator<Item=P> {
+		self.seen.extend(
+			paths.into_iter()
+				.filter_map(|p|
+					resolve_path(PathBuf::from(p.as_ref()), false)
+						.map(|(h, _, _)| h)
+				)
+		);
+
+		self
+	}
+
 	/// # With Path.
 	///
 	/// Add a path to the finder. If the path is a file, it will be checked
@@ -397,6 +429,31 @@ impl Dowser {
 			}
 		}
 
+		self
+	}
+
+	/// # Without Path.
+	///
+	/// This will prevent the provided directory or file from being crawled or
+	/// included in the output.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files = Vec::<PathBuf>::try_from(
+	///     Dowser::default()
+	///         .with_path("/my/dir")
+	///         .without_path("/my/dir/ignore")
+	/// ).expect("No files were found.");
+	/// ```
+	pub fn without_path<P>(mut self, path: P) -> Self
+	where P: AsRef<Path> {
+		if let Some((h, _, _)) = resolve_path(PathBuf::from(path.as_ref()), false) {
+			self.seen.insert(h);
+		}
 		self
 	}
 }
