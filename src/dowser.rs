@@ -8,6 +8,7 @@ use crate::{
 	utility::{
 		resolve_dir_entry,
 		resolve_path,
+		resolve_path_hash,
 	},
 };
 use rayon::iter::{
@@ -388,10 +389,7 @@ impl Dowser {
 		I: IntoIterator<Item=P> {
 		self.seen.extend(
 			paths.into_iter()
-				.filter_map(|p|
-					resolve_path(PathBuf::from(p.as_ref()), false)
-						.map(|(h, _, _)| h)
-				)
+				.filter_map(|p| resolve_path_hash(PathBuf::from(p.as_ref()), false))
 		);
 
 		self
@@ -451,7 +449,7 @@ impl Dowser {
 	/// ```
 	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some((h, _, _)) = resolve_path(PathBuf::from(path.as_ref()), false) {
+		if let Some(h) = resolve_path_hash(PathBuf::from(path.as_ref()), false) {
 			self.seen.insert(h);
 		}
 		self
