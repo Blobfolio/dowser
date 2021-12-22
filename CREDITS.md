@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   dowser
-    Version:   0.3.3
-    Generated: 2021-12-21 06:24:48 UTC
+    Version:   0.3.4
+    Generated: 2021-12-22 03:48:31 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
