@@ -2,6 +2,17 @@
 
 
 
+## [0.3.4](https://github.com/Blobfolio/dowser/releases/tag/v0.3.4) - 2021-12-21
+
+### Added
+
+* `dowser::Dowser::par_without_paths`
+
+### Improved
+
+* Documentation.
+
+
 ## [0.3.3](https://github.com/Blobfolio/dowser/releases/tag/v0.3.3) - 2021-12-20
 
 ### Added

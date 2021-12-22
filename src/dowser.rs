@@ -12,8 +12,10 @@ use crate::{
 	},
 };
 use rayon::iter::{
+	IntoParallelIterator,
 	ParallelBridge,
 	ParallelDrainRange,
+	ParallelExtend,
 	ParallelIterator,
 };
 use std::{
@@ -371,17 +373,18 @@ impl Dowser {
 	/// This will prevent the provided directories or files from being crawled
 	/// or included in the output.
 	///
+	/// Note: without paths should be specified before with paths, just in case
+	/// the sets overlap.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
 	///
-	/// let files = Vec::<PathBuf>::try_from(
-	///     Dowser::default()
-	///         .with_path("/my/dir")
-	///         .without_paths(&["/my/dir/ignore"])
-	/// ).expect("No files were found.");
+	/// let files = Dowser::default()
+	///     .without_paths(&["/my/dir/ignore"])
+	///     .with_path("/my/dir")
+	///     .into_vec();
 	/// ```
 	pub fn without_paths<P, I>(mut self, paths: I) -> Self
 	where
@@ -389,7 +392,22 @@ impl Dowser {
 		I: IntoIterator<Item=P> {
 		self.seen.extend(
 			paths.into_iter()
-				.filter_map(|p| resolve_path_hash(PathBuf::from(p.as_ref()), false))
+				.filter_map(|p| resolve_path_hash(p.as_ref()))
+		);
+
+		self
+	}
+
+	/// # Without Paths (Parallel).
+	///
+	/// This is a multi-threaded version of [`Dowser::without_paths`].
+	pub fn par_without_paths<P, I>(mut self, paths: I) -> Self
+	where
+		P: AsRef<Path>,
+		I: IntoParallelIterator<Item=P> {
+		self.seen.par_extend(
+			paths.into_par_iter()
+				.filter_map(|p| resolve_path_hash(p.as_ref()))
 		);
 
 		self
@@ -435,21 +453,22 @@ impl Dowser {
 	/// This will prevent the provided directory or file from being crawled or
 	/// included in the output.
 	///
+	/// Note: without paths should be specified before with paths, just in case
+	/// the sets overlap.
+	///
 	/// ## Examples
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
 	///
-	/// let files = Vec::<PathBuf>::try_from(
-	///     Dowser::default()
-	///         .with_path("/my/dir")
-	///         .without_path("/my/dir/ignore")
-	/// ).expect("No files were found.");
+	/// let files = Dowser::default()
+	///     .without_path("/my/dir/ignore")
+	///     .with_path("/my/dir")
+	///     .into_vec();
 	/// ```
 	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some(h) = resolve_path_hash(PathBuf::from(path.as_ref()), false) {
+		if let Some(h) = resolve_path_hash(path.as_ref()) {
 			self.seen.insert(h);
 		}
 		self
