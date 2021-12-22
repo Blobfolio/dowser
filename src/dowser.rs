@@ -12,8 +12,10 @@ use crate::{
 	},
 };
 use rayon::iter::{
+	IntoParallelIterator,
 	ParallelBridge,
 	ParallelDrainRange,
+	ParallelExtend,
 	ParallelIterator,
 };
 use std::{
@@ -390,7 +392,22 @@ impl Dowser {
 		I: IntoIterator<Item=P> {
 		self.seen.extend(
 			paths.into_iter()
-				.filter_map(|p| resolve_path_hash(PathBuf::from(p.as_ref()), false))
+				.filter_map(|p| resolve_path_hash(p.as_ref()))
+		);
+
+		self
+	}
+
+	/// # Without Paths (Parallel).
+	///
+	/// This is a multi-threaded version of [`Dowser::without_paths`].
+	pub fn par_without_paths<P, I>(mut self, paths: I) -> Self
+	where
+		P: AsRef<Path>,
+		I: IntoParallelIterator<Item=P> {
+		self.seen.par_extend(
+			paths.into_par_iter()
+				.filter_map(|p| resolve_path_hash(p.as_ref()))
 		);
 
 		self
@@ -451,7 +468,7 @@ impl Dowser {
 	/// ```
 	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some(h) = resolve_path_hash(PathBuf::from(path.as_ref()), false) {
+		if let Some(h) = resolve_path_hash(path.as_ref()) {
 			self.seen.insert(h);
 		}
 		self

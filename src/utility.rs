@@ -7,9 +7,12 @@ use rayon::{
 	iter::ParallelIterator,
 	prelude::IntoParallelIterator,
 };
-use std::path::{
-	Path,
-	PathBuf,
+use std::{
+	os::unix::fs::MetadataExt,
+	path::{
+		Path,
+		PathBuf,
+	},
 };
 
 
@@ -51,6 +54,8 @@ pub fn path_as_bytes(p: &Path) -> &[u8] {
 	p.as_os_str().as_bytes()
 }
 
+
+
 #[doc(hidden)]
 /// # Resolve `DirEntry`.
 ///
@@ -80,8 +85,6 @@ pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>
 /// are joined to the seed, they'll be canonical so long as the seed was,
 /// except in cases of symlinks.
 pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, PathBuf)> {
-	use std::os::unix::fs::MetadataExt;
-
 	if trusted {
 		let meta = std::fs::symlink_metadata(&path).ok()?;
 		if ! meta.file_type().is_symlink() {
@@ -102,17 +105,7 @@ pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, P
 /// This is identical to `resolve_path`, except it only returns the hash. It
 /// is used by [`Dowser::without_paths`] and [`Dowser::without_path`], which
 /// don't actually need anything more.
-pub(crate) fn resolve_path_hash(path: PathBuf, trusted: bool) -> Option<u64> {
-	use std::os::unix::fs::MetadataExt;
-
-	if trusted {
-		let meta = std::fs::symlink_metadata(&path).ok()?;
-		if ! meta.file_type().is_symlink() {
-			let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
-			return Some(hash);
-		}
-	}
-
+pub(crate) fn resolve_path_hash(path: &Path) -> Option<u64> {
 	let path = std::fs::canonicalize(path).ok()?;
 	let meta = std::fs::metadata(&path).ok()?;
 	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
