@@ -4,11 +4,7 @@
 
 use crate::{
 	NoHashState,
-	utility::{
-		resolve_dir_entry,
-		resolve_path,
-		resolve_path_hash,
-	},
+	NoHashU64,
 };
 use parking_lot::Mutex;
 use rayon::iter::{
@@ -27,8 +23,10 @@ use std::{
 	fmt,
 	fs::{
 		self,
+		DirEntry,
 		ReadDir,
 	},
+	os::unix::fs::MetadataExt,
 	path::{
 		Path,
 		PathBuf,
@@ -501,16 +499,13 @@ impl Dowser {
 		while ! dirs.is_empty() {
 			dirs = dirs.par_drain(..)
 				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(resolve_dir_entry)
-				.filter_map(|(h, is_dir, p)|
-					if seen.lock().insert(h) {
-						if is_dir { fs::read_dir(p).ok() }
-						else {
-							if cb(&p) { files.lock().push(p); }
-							None
-						}
+				.filter_map(|e| resolve_dir_entry(e, &seen))
+				.filter_map(|(is_dir, p)|
+					if is_dir { fs::read_dir(p).ok() }
+					else {
+						if cb(&p) { files.lock().push(p); }
+						None
 					}
-					else { None }
 				)
 				.collect();
 		}
@@ -519,6 +514,68 @@ impl Dowser {
 		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
 			.map_or_else(|_| Vec::new(), |x| std::mem::take(&mut x.lock()))
 	}
+}
+
+
+
+#[inline]
+/// # Resolve `DirEntry`.
+///
+/// This is a convenience callback for [`Dowser`] used during `ReadDir`
+/// traversal.
+///
+/// See [`resolve_path`] for more information.
+fn resolve_dir_entry(
+	entry: Result<DirEntry, std::io::Error>,
+	seen: &Arc<Mutex<HashSet<u64, NoHashState>>>
+) -> Option<(bool, PathBuf)> {
+	let entry = entry.ok()?;
+	let (h, is_dir, path) = resolve_path(entry.path(), true)?;
+
+	if seen.lock().insert(h) { Some((is_dir, path)) }
+	else { None }
+}
+
+/// # Resolve Path.
+///
+/// This attempts to cheaply resolve a given path, returning:
+/// * A unique hash derived from the path's device and inode.
+/// * A bool indicating whether or not the path is a directory.
+/// * The canonicalized path.
+///
+/// As [`std::fs::canonicalize`] is an expensive operation, this method allows
+/// a "trusted" bypass, which will only canonicalize the path if it is a
+/// symlink.
+///
+/// The trusted mode is only appropriate in cases like `ReadDir` where the
+/// directory seed was canonicalized. The idea is that since `DirEntry` paths
+/// are joined to the seed, they'll be canonical so long as the seed was,
+/// except in cases of symlinks.
+fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, PathBuf)> {
+	if trusted {
+		let meta = std::fs::symlink_metadata(&path).ok()?;
+		if ! meta.file_type().is_symlink() {
+			let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+			return Some((hash, meta.is_dir(), path));
+		}
+	}
+
+	let path = std::fs::canonicalize(path).ok()?;
+	let meta = std::fs::metadata(&path).ok()?;
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	Some((hash, meta.is_dir(), path))
+}
+
+/// # Resolve Path Hash.
+///
+/// This is identical to `resolve_path`, except it only returns the hash. It
+/// is used by [`Dowser::without_paths`] and [`Dowser::without_path`], which
+/// don't actually need anything more.
+fn resolve_path_hash(path: &Path) -> Option<u64> {
+	let path = std::fs::canonicalize(path).ok()?;
+	let meta = std::fs::metadata(&path).ok()?;
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	Some(hash)
 }
 
 
