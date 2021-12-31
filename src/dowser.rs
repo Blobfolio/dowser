@@ -576,6 +576,54 @@ impl Dowser {
 		// Unwrap and return.
 		files
 	}
+
+	#[must_use]
+	/// # Shallow Search.
+	///
+	/// This works like [`Dowser::into_vec`] but without the recursion; only
+	/// the top-level files within the specified roots will be tested and
+	/// returned.
+	///
+	/// If `include_dirs` is true, sub-directory paths will also be tested and
+	/// returned.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	///
+	/// let files = Dowser::default()
+	///     .with_path("/my/dir")
+	///     .shallow(false);
+	///
+	/// let files_and_dirs = Dowser::default()
+	///     .with_path("/my/dir")
+	///     .shallow(true);
+	/// ```
+	pub fn shallow(self, include_dirs: bool) -> Vec<PathBuf> {
+		// Easy abort!
+		if self.dirs.is_empty() {
+			return self.files;
+		}
+
+		// Break up the data.
+		let Dowser { mut dirs, mut files, seen, cb } = self;
+		let seen = Arc::from(Mutex::new(seen));
+
+		// Process until we're our of directories.
+		files.par_extend(
+			dirs.par_drain(..)
+				.flat_map(ParallelBridge::par_bridge)
+				.filter_map(|e| resolve_dir_entry(e, &seen))
+				.filter_map(|(is_dir, p)|
+					if (include_dirs || ! is_dir) && cb(&p) { Some(p) }
+					else { None }
+				)
+		);
+
+		// Unwrap and return.
+		files
+	}
 }
 
 
@@ -765,5 +813,41 @@ mod tests {
 		};
 
 		assert_eq!(trusting, canon);
+	}
+
+	#[test]
+	fn t_shallow() {
+		let test_dir = std::fs::canonicalize("./tests/links").expect("Missing dowser link directory.");
+
+		let mut raw = vec![
+			test_dir.join("01"),
+			test_dir.join("02"),
+			test_dir.join("03"),
+			test_dir.join("04"),
+			test_dir.join("05"), // Directory.
+			test_dir.join("06"), // Directory.
+		];
+
+		let mut found = Dowser::from(&test_dir).shallow(true);
+		found.sort();
+
+		assert_eq!(raw, found);
+
+		// Let's test the filter.
+		raw.pop();
+		found = Dowser::filtered(|p: &Path| ! p.ends_with("06"))
+			.with_path(&test_dir)
+			.shallow(true);
+		found.sort();
+
+		assert_eq!(raw, found);
+
+		// One last time without any directories.
+		raw.pop();
+
+		found = Dowser::from(&test_dir).shallow(false);
+		found.sort();
+
+		assert_eq!(raw, found);
 	}
 }
