@@ -3,7 +3,6 @@
 */
 
 use crate::{
-	mutex_ptr,
 	NoHashState,
 	utility::{
 		resolve_dir_entry,
@@ -11,6 +10,7 @@ use crate::{
 		resolve_path_hash,
 	},
 };
+use parking_lot::Mutex;
 use rayon::iter::{
 	IntoParallelIterator,
 	ParallelBridge,
@@ -33,10 +33,7 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	sync::{
-		Arc,
-		Mutex,
-	},
+	sync::Arc,
 };
 
 
@@ -511,10 +508,10 @@ impl Dowser {
 				.flat_map(ParallelBridge::par_bridge)
 				.filter_map(resolve_dir_entry)
 				.filter_map(|(h, is_dir, p)|
-					if mutex_ptr!(seen).insert(h) {
+					if seen.lock().insert(h) {
 						if is_dir { fs::read_dir(p).ok() }
 						else {
-							if cb(&p) { mutex_ptr!(files).push(p); }
+							if cb(&p) { files.lock().push(p); }
 							None
 						}
 					}
@@ -527,9 +524,7 @@ impl Dowser {
 
 		// Unwrap and return.
 		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
-			.ok()
-			.and_then(|x| x.into_inner().ok())
-			.unwrap_or_default()
+			.map_or_else(|_| Vec::new(), |x| std::mem::take(&mut x.lock()))
 	}
 }
 
