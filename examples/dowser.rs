@@ -7,10 +7,8 @@ use dowser::{
 	Extension,
 };
 use std::{
-	path::{
-		Path,
-		PathBuf,
-	},
+	path::Path,
+	time::Instant,
 };
 
 /// Do it.
@@ -18,10 +16,18 @@ fn main() {
 	const EXT: Extension = Extension::new2(*b"gz");
 
 	// Search for gzipped MAN pages.
-	let files = Vec::<PathBuf>::try_from(
-		Dowser::filtered(|p: &Path| Extension::try_from2(p).map_or(false, |p| p == EXT))
-		.with_path("/usr/share/man")
-	).expect("No files were found.");
+	let now = Instant::now();
+	let files = Dowser::filtered(|p: &Path| Extension::try_from2(p).map_or(false, |p| p == EXT))
+		.with_path("/usr/share")
+		.into_vec();
 
-	println!("There are {} .gz files in /usr/share/man.", files.len());
+	println!("Search took {} seconds.", now.elapsed().as_millis() as f64 / 1000.0);
+
+	// Show what we found.
+	if files.is_empty() {
+		println!("No .gz files were found in /usr/share/.");
+	}
+	else {
+		println!("There are {} .gz files in /usr/share/.", files.len());
+	}
 }
