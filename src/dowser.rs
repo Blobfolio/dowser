@@ -370,7 +370,7 @@ impl Dowser {
 	/// This will prevent the provided directories or files from being crawled
 	/// or included in the output.
 	///
-	/// Note: without paths should be specified before with paths, just in case
+	/// Note: without-paths should be specified before with-paths, just in case
 	/// the sets overlap.
 	///
 	/// ## Examples
@@ -450,7 +450,7 @@ impl Dowser {
 	/// This will prevent the provided directory or file from being crawled or
 	/// included in the output.
 	///
-	/// Note: without paths should be specified before with paths, just in case
+	/// Note: without-paths should be specified before with-paths, just in case
 	/// the sets overlap.
 	///
 	/// ## Examples
