@@ -493,28 +493,37 @@ impl Dowser {
 	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> {
 		// Break up the data.
-		let Dowser { mut dirs, files, seen, cb } = self;
+		let Dowser { mut dirs, mut files, seen, cb } = self;
 		let seen = Arc::from(Mutex::new(seen));
-		let files = Arc::from(Mutex::new(files));
 
 		// Process until we're our of directories.
 		while ! dirs.is_empty() {
-			dirs = dirs.par_drain(..)
-				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(|e| resolve_dir_entry(e, &seen))
-				.filter_map(|(is_dir, p)|
-					if is_dir { fs::read_dir(p).ok() }
-					else {
-						if cb(&p) { files.lock().push(p); }
-						None
-					}
-				)
-				.collect();
+			let (tx, rx) = flume::unbounded();
+
+			files.par_extend(
+				dirs.par_drain(..)
+					.flat_map(ParallelBridge::par_bridge)
+					.filter_map(|e| resolve_dir_entry(e, &seen))
+					.filter_map(|(is_dir, p)|
+						if is_dir {
+							if let Ok(rd) = fs::read_dir(p) {
+								// No need to panic; if for some reason this
+								// fails we just won't read the directory.
+								let _res = tx.send(rd);
+							}
+							None
+						}
+						else if cb(&p) { Some(p) }
+						else { None }
+					)
+			);
+
+			drop(tx);
+			dirs.extend(rx);
 		}
 
 		// Unwrap and return.
-		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
-			.map_or_else(|_| Vec::new(), |x| std::mem::take(&mut x.lock()))
+		files
 	}
 }
 

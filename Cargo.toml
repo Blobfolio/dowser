@@ -36,6 +36,10 @@ ahash = "0.7.*"
 parking_lot = "0.11.*"
 rayon = "1.5.*"
 
+[dependencies.flume]
+version = "0.10.9"
+default-features = false
+
 [dependencies.regex]
 version = "1.5.*"
 optional = true
