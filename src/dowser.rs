@@ -539,7 +539,6 @@ impl Dowser {
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
 	///
 	/// let files = Dowser::default().with_path("/my/dir").into_vec();
 	/// ```
