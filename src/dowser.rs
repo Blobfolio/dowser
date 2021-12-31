@@ -260,6 +260,62 @@ impl TryFrom<Dowser> for Vec<PathBuf> {
 
 /// # Instantiation.
 impl Dowser {
+	#[must_use]
+	/// # With Capacity.
+	///
+	/// Create a default [`Dowser`] using the estimated node counts. The closer
+	/// this value is to the total number of files and directories the scan
+	/// will turn up, the fewer resize allocations there should be.
+	///
+	/// For reference, the default value is `2048`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	///
+	/// let files = Dowser::with_capacity(128)
+	///     .with_path("/my/dir")
+	///     .into_vec();
+	/// ```
+	pub fn with_capacity(len: usize) -> Self {
+		Self {
+			dirs: Vec::new(),
+			files: Vec::with_capacity(len.wrapping_div(2)),
+			seen: HashSet::with_capacity_and_hasher(len, NoHashState),
+			cb: Box::new(|_: &Path| true),
+		}
+	}
+
+	#[must_use]
+	/// # With Capacity and Filter.
+	///
+	/// Create a filtered [`Dowser`] using the estimated node counts. The
+	/// closer this value is to the total number of files and directories the
+	/// scan will turn up, the fewer resize allocations there should be.
+	///
+	/// For reference, the default value is `2048`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::Path;
+	///
+	/// let files = Dowser::with_capacity_and_filter(128, |p: &Path| { true })
+	///     .with_path("/my/dir")
+	///     .into_vec();
+	/// ```
+	pub fn with_capacity_and_filter<F>(len: usize, cb: F) -> Self
+	where F: Fn(&Path) -> bool + 'static + Send + Sync {
+		Self {
+			dirs: Vec::new(),
+			files: Vec::with_capacity(len.wrapping_div(2)),
+			seen: HashSet::with_capacity_and_hasher(len, NoHashState),
+			cb: Box::new(cb),
+		}
+	}
+
 	#[inline]
 	/// # Filtered via Callback.
 	///
