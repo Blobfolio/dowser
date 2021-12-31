@@ -9,7 +9,7 @@ use std::hash::{
 
 
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 /// # Passthrough Hash State.
 ///
 /// This is just a fancy alias for [`NoHashU64::default`].

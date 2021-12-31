@@ -2,18 +2,11 @@
 # Dowser: Utility Methods.
 */
 
-use crate::NoHashU64;
 use rayon::{
 	iter::ParallelIterator,
 	prelude::IntoParallelIterator,
 };
-use std::{
-	os::unix::fs::MetadataExt,
-	path::{
-		Path,
-		PathBuf,
-	},
-};
+use std::path::Path;
 
 
 
@@ -56,64 +49,6 @@ pub fn path_as_bytes(p: &Path) -> &[u8] {
 
 
 
-#[doc(hidden)]
-/// # Resolve `DirEntry`.
-///
-/// This is a convenience callback for [`Dowser`] used during `ReadDir`
-/// traversal.
-///
-/// See [`resolve_path`] for more information.
-pub(crate) fn resolve_dir_entry(entry: Result<std::fs::DirEntry, std::io::Error>) -> Option<(u64, bool, PathBuf)> {
-	let entry = entry.ok()?;
-	resolve_path(entry.path(), true)
-}
-
-#[doc(hidden)]
-/// # Resolve Path.
-///
-/// This attempts to cheaply resolve a given path, returning:
-/// * A unique hash derived from the path's device and inode.
-/// * A bool indicating whether or not the path is a directory.
-/// * The canonicalized path.
-///
-/// As [`std::fs::canonicalize`] is an expensive operation, this method allows
-/// a "trusted" bypass, which will only canonicalize the path if it is a
-/// symlink.
-///
-/// The trusted mode is only appropriate in cases like `ReadDir` where the
-/// directory seed was canonicalized. The idea is that since `DirEntry` paths
-/// are joined to the seed, they'll be canonical so long as the seed was,
-/// except in cases of symlinks.
-pub(crate) fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, PathBuf)> {
-	if trusted {
-		let meta = std::fs::symlink_metadata(&path).ok()?;
-		if ! meta.file_type().is_symlink() {
-			let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
-			return Some((hash, meta.is_dir(), path));
-		}
-	}
-
-	let path = std::fs::canonicalize(path).ok()?;
-	let meta = std::fs::metadata(&path).ok()?;
-	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
-	Some((hash, meta.is_dir(), path))
-}
-
-#[doc(hidden)]
-/// # Resolve Path Hash.
-///
-/// This is identical to `resolve_path`, except it only returns the hash. It
-/// is used by [`Dowser::without_paths`] and [`Dowser::without_path`], which
-/// don't actually need anything more.
-pub(crate) fn resolve_path_hash(path: &Path) -> Option<u64> {
-	let path = std::fs::canonicalize(path).ok()?;
-	let meta = std::fs::metadata(&path).ok()?;
-	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
-	Some(hash)
-}
-
-
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -131,49 +66,5 @@ mod tests {
 
 		// Make sure ownership is still OK.
 		assert_eq!(files.len(), 3);
-	}
-
-	#[test]
-	fn t_resolve_path() {
-		let test_dir = std::fs::canonicalize("./tests/links").expect("Missing dowser link directory.");
-
-		let raw = vec![
-			test_dir.join("01"),
-			test_dir.join("02"),
-			test_dir.join("03"),
-			test_dir.join("04"),
-			test_dir.join("05"), // Directory.
-			test_dir.join("06"), // Directory.
-			test_dir.join("07"), // Sym to six.
-			test_dir.join("06/08"),
-			test_dir.join("06/09"),
-			test_dir.join("06/10"), // Sym to one.
-		];
-
-		let canon = {
-			let mut tmp: Vec<PathBuf> = raw.iter()
-				.filter_map(|x| std::fs::canonicalize(x).ok())
-				.collect();
-			tmp.sort();
-			tmp.dedup();
-			tmp
-		};
-
-		// There should be two fewer entries as two are symlinks.
-		assert_eq!(raw.len(), 10);
-		assert_eq!(canon.len(), 8, "{:?}", canon);
-		assert!(! canon.contains(&raw[6]));
-		assert!(! canon.contains(&raw[9]));
-
-		let trusting = {
-			let mut tmp: Vec<PathBuf> = raw.iter()
-				.filter_map(|x| resolve_path(x.clone(), true).map(|(_, _, p)| p))
-				.collect();
-			tmp.sort();
-			tmp.dedup();
-			tmp
-		};
-
-		assert_eq!(trusting, canon);
 	}
 }

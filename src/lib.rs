@@ -142,19 +142,6 @@ use std::path::{
 
 
 
-#[doc(hidden)]
-#[macro_export]
-/// Helper: Mutex Unlock.
-///
-/// This just moves tedious code out of the way.
-macro_rules! mutex_ptr {
-	($mutex:expr) => (
-		$mutex.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
-	);
-}
-
-
-
 #[must_use]
 #[deprecated(since = "0.3.1", note = "Prefer dowser::Dowser::default() for unfiltered file searching.")]
 /// # One-Shot.
@@ -180,6 +167,5 @@ pub fn dowse<P, I>(paths: I) -> Vec<PathBuf>
 where
 	P: AsRef<Path>,
 	I: IntoIterator<Item=P> {
-	Vec::<PathBuf>::try_from(Dowser::default().with_paths(paths))
-		.unwrap_or_default()
+	Dowser::default().with_paths(paths).into_vec()
 }

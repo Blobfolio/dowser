@@ -3,14 +3,10 @@
 */
 
 use crate::{
-	mutex_ptr,
 	NoHashState,
-	utility::{
-		resolve_dir_entry,
-		resolve_path,
-		resolve_path_hash,
-	},
+	NoHashU64,
 };
+use parking_lot::Mutex;
 use rayon::iter::{
 	IntoParallelIterator,
 	ParallelBridge,
@@ -27,16 +23,15 @@ use std::{
 	fmt,
 	fs::{
 		self,
+		DirEntry,
 		ReadDir,
 	},
+	os::unix::fs::MetadataExt,
 	path::{
 		Path,
 		PathBuf,
 	},
-	sync::{
-		Arc,
-		Mutex,
-	},
+	sync::Arc,
 };
 
 
@@ -153,9 +148,7 @@ macro_rules! impl_from_owned {
 					.filter_map(|(h, is_dir, p)|
 						if seen.insert(h) {
 							if is_dir {
-								if let Ok(rd) = fs::read_dir(p) {
-									Some(rd)
-								}
+								if let Ok(rd) = fs::read_dir(p) { Some(rd) }
 								else { None }
 							}
 							else {
@@ -216,18 +209,15 @@ impl From<PathBuf> for Dowser {
 	}
 }
 
-impl From<&PathBuf> for Dowser {
-	#[inline]
-	fn from(src: &PathBuf) -> Self { Self::from(src.clone()) }
-}
-
-impl From<&Path> for Dowser {
-	#[inline]
-	fn from(src: &Path) -> Self { Self::from(src.to_path_buf()) }
-}
-
 /// # Helper: Impl From `AsRef<Path>` Types.
-macro_rules! impl_from_as_path {
+macro_rules! impl_from_path {
+	($($cast:ident $ty:ty),+) => ($(
+		impl From<$ty> for Dowser {
+			#[inline]
+			fn from(src: $ty) -> Self { Self::from(src.$cast()) }
+		}
+	)+);
+
 	($($ty:ty),+) => ($(
 		impl From<$ty> for Dowser {
 			#[inline]
@@ -236,7 +226,8 @@ macro_rules! impl_from_as_path {
 	)+);
 }
 
-impl_from_as_path!(&str, String, &String, &OsStr, OsString, &OsString);
+impl_from_path!(clone &PathBuf, to_path_buf &Path);
+impl_from_path!(&str, String, &String, &OsStr, OsString, &OsString);
 
 impl TryFrom<Dowser> for Vec<PathBuf> {
 	type Error = DowserError;
@@ -269,6 +260,62 @@ impl TryFrom<Dowser> for Vec<PathBuf> {
 
 /// # Instantiation.
 impl Dowser {
+	#[must_use]
+	/// # With Capacity.
+	///
+	/// Create a default [`Dowser`] using the estimated node counts. The closer
+	/// this value is to the total number of files and directories the scan
+	/// will turn up, the fewer resize allocations there should be.
+	///
+	/// For reference, the default value is `2048`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	///
+	/// let files = Dowser::with_capacity(128)
+	///     .with_path("/my/dir")
+	///     .into_vec();
+	/// ```
+	pub fn with_capacity(len: usize) -> Self {
+		Self {
+			dirs: Vec::new(),
+			files: Vec::with_capacity(len),
+			seen: HashSet::with_capacity_and_hasher(len, NoHashState),
+			cb: Box::new(|_: &Path| true),
+		}
+	}
+
+	#[must_use]
+	/// # With Capacity and Filter.
+	///
+	/// Create a filtered [`Dowser`] using the estimated node counts. The
+	/// closer this value is to the total number of files and directories the
+	/// scan will turn up, the fewer resize allocations there should be.
+	///
+	/// For reference, the default value is `2048`.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::Path;
+	///
+	/// let files = Dowser::with_capacity_and_filter(128, |p: &Path| { true })
+	///     .with_path("/my/dir")
+	///     .into_vec();
+	/// ```
+	pub fn with_capacity_and_filter<F>(len: usize, cb: F) -> Self
+	where F: Fn(&Path) -> bool + 'static + Send + Sync {
+		Self {
+			dirs: Vec::new(),
+			files: Vec::with_capacity(len),
+			seen: HashSet::with_capacity_and_hasher(len, NoHashState),
+			cb: Box::new(cb),
+		}
+	}
+
 	#[inline]
 	/// # Filtered via Callback.
 	///
@@ -278,12 +325,12 @@ impl Dowser {
 	///
 	/// ## Examples
 	///
-	/// ```ignore
+	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
+	/// use std::path::{Path, PathBuf};
 	///
 	/// let files = Vec::<PathBuf>::try_from(
-	///     Dowser::filtered(|p: &Path| { ... }).with_path("/my/dir")
+	///     Dowser::filtered(|p: &Path| { true }).with_path("/my/dir")
 	/// ).expect("No files were found.");
 	/// ```
 	pub fn filtered<F>(cb: F) -> Self
@@ -373,7 +420,7 @@ impl Dowser {
 	/// This will prevent the provided directories or files from being crawled
 	/// or included in the output.
 	///
-	/// Note: without paths should be specified before with paths, just in case
+	/// Note: without-paths should be specified before with-paths, just in case
 	/// the sets overlap.
 	///
 	/// ## Examples
@@ -400,7 +447,9 @@ impl Dowser {
 
 	/// # Without Paths (Parallel).
 	///
-	/// This is a multi-threaded version of [`Dowser::without_paths`].
+	/// This is a multi-threaded version of [`Dowser::without_paths`]. If you
+	/// know your list is small, the sequential version will probably be
+	/// faster.
 	pub fn par_without_paths<P, I>(mut self, paths: I) -> Self
 	where
 		P: AsRef<Path>,
@@ -453,7 +502,7 @@ impl Dowser {
 	/// This will prevent the provided directory or file from being crawled or
 	/// included in the output.
 	///
-	/// Note: without paths should be specified before with paths, just in case
+	/// Note: without-paths should be specified before with-paths, just in case
 	/// the sets overlap.
 	///
 	/// ## Examples
@@ -490,47 +539,153 @@ impl Dowser {
 	///
 	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
 	///
 	/// let files = Dowser::default().with_path("/my/dir").into_vec();
 	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> {
-		// We don't have to do anything!
+		// Break up the data.
+		let Dowser { mut dirs, mut files, seen, cb } = self;
+		let seen = Arc::from(Mutex::new(seen));
+
+		// Process until we're our of directories.
+		while ! dirs.is_empty() {
+			let (tx, rx) = flume::unbounded();
+
+			files.par_extend(
+				dirs.par_drain(..)
+					.flat_map(ParallelBridge::par_bridge)
+					.filter_map(|e| resolve_dir_entry(e, &seen))
+					.filter_map(|(is_dir, p)|
+						if is_dir {
+							if let Ok(rd) = fs::read_dir(p) {
+								// No need to panic; if for some reason this
+								// fails we just won't read the directory.
+								let _res = tx.send(rd);
+							}
+							None
+						}
+						else if cb(&p) { Some(p) }
+						else { None }
+					)
+			);
+
+			drop(tx);
+			dirs.extend(rx);
+		}
+
+		// Unwrap and return.
+		files
+	}
+
+	#[must_use]
+	/// # Shallow Search.
+	///
+	/// This works like [`Dowser::into_vec`] but without the recursion; only
+	/// the top-level files within the specified roots will be tested and
+	/// returned.
+	///
+	/// If `include_dirs` is true, sub-directory paths will also be tested and
+	/// returned.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	///
+	/// let files = Dowser::default()
+	///     .with_path("/my/dir")
+	///     .shallow(false);
+	///
+	/// let files_and_dirs = Dowser::default()
+	///     .with_path("/my/dir")
+	///     .shallow(true);
+	/// ```
+	pub fn shallow(self, include_dirs: bool) -> Vec<PathBuf> {
+		// Easy abort!
 		if self.dirs.is_empty() {
 			return self.files;
 		}
 
 		// Break up the data.
-		let Dowser { mut dirs, files, seen, cb } = self;
+		let Dowser { mut dirs, mut files, seen, cb } = self;
 		let seen = Arc::from(Mutex::new(seen));
-		let files = Arc::from(Mutex::new(files));
 
 		// Process until we're our of directories.
-		loop {
-			dirs = dirs.par_drain(..)
+		files.par_extend(
+			dirs.par_drain(..)
 				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(resolve_dir_entry)
-				.filter_map(|(h, is_dir, p)|
-					if mutex_ptr!(seen).insert(h) {
-						if is_dir { fs::read_dir(p).ok() }
-						else {
-							if cb(&p) { mutex_ptr!(files).push(p); }
-							None
-						}
-					}
+				.filter_map(|e| resolve_dir_entry(e, &seen))
+				.filter_map(|(is_dir, p)|
+					if (include_dirs || ! is_dir) && cb(&p) { Some(p) }
 					else { None }
 				)
-				.collect();
-
-			if dirs.is_empty() { break; }
-		}
+		);
 
 		// Unwrap and return.
-		Arc::<Mutex<Vec<PathBuf>>>::try_unwrap(files)
-			.ok()
-			.and_then(|x| x.into_inner().ok())
-			.unwrap_or_default()
+		files
 	}
+}
+
+
+
+#[inline]
+/// # Resolve `DirEntry`.
+///
+/// This is a convenience callback for [`Dowser`] used during `ReadDir`
+/// traversal.
+///
+/// See [`resolve_path`] for more information.
+fn resolve_dir_entry(
+	entry: Result<DirEntry, std::io::Error>,
+	seen: &Arc<Mutex<HashSet<u64, NoHashState>>>
+) -> Option<(bool, PathBuf)> {
+	let entry = entry.ok()?;
+	let (h, is_dir, path) = resolve_path(entry.path(), true)?;
+
+	if seen.lock().insert(h) { Some((is_dir, path)) }
+	else { None }
+}
+
+/// # Resolve Path.
+///
+/// This attempts to cheaply resolve a given path, returning:
+/// * A unique hash derived from the path's device and inode.
+/// * A bool indicating whether or not the path is a directory.
+/// * The canonicalized path.
+///
+/// As [`std::fs::canonicalize`] is an expensive operation, this method allows
+/// a "trusted" bypass, which will only canonicalize the path if it is a
+/// symlink.
+///
+/// The trusted mode is only appropriate in cases like `ReadDir` where the
+/// directory seed was canonicalized. The idea is that since `DirEntry` paths
+/// are joined to the seed, they'll be canonical so long as the seed was,
+/// except in cases of symlinks.
+fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, PathBuf)> {
+	if trusted {
+		let meta = std::fs::symlink_metadata(&path).ok()?;
+		if ! meta.file_type().is_symlink() {
+			let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+			return Some((hash, meta.is_dir(), path));
+		}
+	}
+
+	let path = std::fs::canonicalize(path).ok()?;
+	let meta = std::fs::metadata(&path).ok()?;
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	Some((hash, meta.is_dir(), path))
+}
+
+/// # Resolve Path Hash.
+///
+/// This is identical to `resolve_path`, except it only returns the hash. It
+/// is used by [`Dowser::without_paths`] and [`Dowser::without_path`], which
+/// don't actually need anything more.
+fn resolve_path_hash(path: &Path) -> Option<u64> {
+	let path = std::fs::canonicalize(path).ok()?;
+	let meta = std::fs::metadata(&path).ok()?;
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	Some(hash)
 }
 
 
@@ -614,5 +769,85 @@ mod tests {
 
 		let from = Dowser::from(vec![PathBuf::from("tests/")]).into_vec();
 		assert!(compare_vecs(&normal, &from));
+	}
+
+	#[test]
+	fn t_resolve_path() {
+		let test_dir = std::fs::canonicalize("./tests/links").expect("Missing dowser link directory.");
+
+		let raw = vec![
+			test_dir.join("01"),
+			test_dir.join("02"),
+			test_dir.join("03"),
+			test_dir.join("04"),
+			test_dir.join("05"), // Directory.
+			test_dir.join("06"), // Directory.
+			test_dir.join("07"), // Sym to six.
+			test_dir.join("06/08"),
+			test_dir.join("06/09"),
+			test_dir.join("06/10"), // Sym to one.
+		];
+
+		let canon = {
+			let mut tmp: Vec<PathBuf> = raw.iter()
+				.filter_map(|x| std::fs::canonicalize(x).ok())
+				.collect();
+			tmp.sort();
+			tmp.dedup();
+			tmp
+		};
+
+		// There should be two fewer entries as two are symlinks.
+		assert_eq!(raw.len(), 10);
+		assert_eq!(canon.len(), 8, "{:?}", canon);
+		assert!(! canon.contains(&raw[6]));
+		assert!(! canon.contains(&raw[9]));
+
+		let trusting = {
+			let mut tmp: Vec<PathBuf> = raw.iter()
+				.filter_map(|x| resolve_path(x.clone(), true).map(|(_, _, p)| p))
+				.collect();
+			tmp.sort();
+			tmp.dedup();
+			tmp
+		};
+
+		assert_eq!(trusting, canon);
+	}
+
+	#[test]
+	fn t_shallow() {
+		let test_dir = std::fs::canonicalize("./tests/links").expect("Missing dowser link directory.");
+
+		let mut raw = vec![
+			test_dir.join("01"),
+			test_dir.join("02"),
+			test_dir.join("03"),
+			test_dir.join("04"),
+			test_dir.join("05"), // Directory.
+			test_dir.join("06"), // Directory.
+		];
+
+		let mut found = Dowser::from(&test_dir).shallow(true);
+		found.sort();
+
+		assert_eq!(raw, found);
+
+		// Let's test the filter.
+		raw.pop();
+		found = Dowser::filtered(|p: &Path| ! p.ends_with("06"))
+			.with_path(&test_dir)
+			.shallow(true);
+		found.sort();
+
+		assert_eq!(raw, found);
+
+		// One last time without any directories.
+		raw.pop();
+
+		found = Dowser::from(&test_dir).shallow(false);
+		found.sort();
+
+		assert_eq!(raw, found);
 	}
 }
