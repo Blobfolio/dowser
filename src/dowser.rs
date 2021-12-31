@@ -325,12 +325,12 @@ impl Dowser {
 	///
 	/// ## Examples
 	///
-	/// ```ignore
+	/// ```no_run
 	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
+	/// use std::path::{Path, PathBuf};
 	///
 	/// let files = Vec::<PathBuf>::try_from(
-	///     Dowser::filtered(|p: &Path| { ... }).with_path("/my/dir")
+	///     Dowser::filtered(|p: &Path| { true }).with_path("/my/dir")
 	/// ).expect("No files were found.");
 	/// ```
 	pub fn filtered<F>(cb: F) -> Self
@@ -722,5 +722,49 @@ mod tests {
 
 		let from = Dowser::from(vec![PathBuf::from("tests/")]).into_vec();
 		assert!(compare_vecs(&normal, &from));
+	}
+
+	#[test]
+	fn t_resolve_path() {
+		let test_dir = std::fs::canonicalize("./tests/links").expect("Missing dowser link directory.");
+
+		let raw = vec![
+			test_dir.join("01"),
+			test_dir.join("02"),
+			test_dir.join("03"),
+			test_dir.join("04"),
+			test_dir.join("05"), // Directory.
+			test_dir.join("06"), // Directory.
+			test_dir.join("07"), // Sym to six.
+			test_dir.join("06/08"),
+			test_dir.join("06/09"),
+			test_dir.join("06/10"), // Sym to one.
+		];
+
+		let canon = {
+			let mut tmp: Vec<PathBuf> = raw.iter()
+				.filter_map(|x| std::fs::canonicalize(x).ok())
+				.collect();
+			tmp.sort();
+			tmp.dedup();
+			tmp
+		};
+
+		// There should be two fewer entries as two are symlinks.
+		assert_eq!(raw.len(), 10);
+		assert_eq!(canon.len(), 8, "{:?}", canon);
+		assert!(! canon.contains(&raw[6]));
+		assert!(! canon.contains(&raw[9]));
+
+		let trusting = {
+			let mut tmp: Vec<PathBuf> = raw.iter()
+				.filter_map(|x| resolve_path(x.clone(), true).map(|(_, _, p)| p))
+				.collect();
+			tmp.sort();
+			tmp.dedup();
+			tmp
+		};
+
+		assert_eq!(trusting, canon);
 	}
 }
