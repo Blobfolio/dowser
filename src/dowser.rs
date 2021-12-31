@@ -281,7 +281,7 @@ impl Dowser {
 	pub fn with_capacity(len: usize) -> Self {
 		Self {
 			dirs: Vec::new(),
-			files: Vec::with_capacity(len.wrapping_div(2)),
+			files: Vec::with_capacity(len),
 			seen: HashSet::with_capacity_and_hasher(len, NoHashState),
 			cb: Box::new(|_: &Path| true),
 		}
@@ -310,7 +310,7 @@ impl Dowser {
 	where F: Fn(&Path) -> bool + 'static + Send + Sync {
 		Self {
 			dirs: Vec::new(),
-			files: Vec::with_capacity(len.wrapping_div(2)),
+			files: Vec::with_capacity(len),
 			seen: HashSet::with_capacity_and_hasher(len, NoHashState),
 			cb: Box::new(cb),
 		}
