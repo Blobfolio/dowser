@@ -395,7 +395,9 @@ impl Dowser {
 
 	/// # Without Paths (Parallel).
 	///
-	/// This is a multi-threaded version of [`Dowser::without_paths`].
+	/// This is a multi-threaded version of [`Dowser::without_paths`]. If you
+	/// know your list is small, the sequential version will probably be
+	/// faster.
 	pub fn par_without_paths<P, I>(mut self, paths: I) -> Self
 	where
 		P: AsRef<Path>,
