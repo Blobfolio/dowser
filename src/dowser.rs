@@ -148,9 +148,7 @@ macro_rules! impl_from_owned {
 					.filter_map(|(h, is_dir, p)|
 						if seen.insert(h) {
 							if is_dir {
-								if let Ok(rd) = fs::read_dir(p) {
-									Some(rd)
-								}
+								if let Ok(rd) = fs::read_dir(p) { Some(rd) }
 								else { None }
 							}
 							else {
@@ -211,18 +209,15 @@ impl From<PathBuf> for Dowser {
 	}
 }
 
-impl From<&PathBuf> for Dowser {
-	#[inline]
-	fn from(src: &PathBuf) -> Self { Self::from(src.clone()) }
-}
-
-impl From<&Path> for Dowser {
-	#[inline]
-	fn from(src: &Path) -> Self { Self::from(src.to_path_buf()) }
-}
-
 /// # Helper: Impl From `AsRef<Path>` Types.
-macro_rules! impl_from_as_path {
+macro_rules! impl_from_path {
+	($($cast:ident $ty:ty),+) => ($(
+		impl From<$ty> for Dowser {
+			#[inline]
+			fn from(src: $ty) -> Self { Self::from(src.$cast()) }
+		}
+	)+);
+
 	($($ty:ty),+) => ($(
 		impl From<$ty> for Dowser {
 			#[inline]
@@ -231,7 +226,8 @@ macro_rules! impl_from_as_path {
 	)+);
 }
 
-impl_from_as_path!(&str, String, &String, &OsStr, OsString, &OsString);
+impl_from_path!(clone &PathBuf, to_path_buf &Path);
+impl_from_path!(&str, String, &String, &OsStr, OsString, &OsString);
 
 impl TryFrom<Dowser> for Vec<PathBuf> {
 	type Error = DowserError;
