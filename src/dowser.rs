@@ -492,18 +492,13 @@ impl Dowser {
 	/// let files = Dowser::default().with_path("/my/dir").into_vec();
 	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> {
-		// We don't have to do anything!
-		if self.dirs.is_empty() {
-			return self.files;
-		}
-
 		// Break up the data.
 		let Dowser { mut dirs, files, seen, cb } = self;
 		let seen = Arc::from(Mutex::new(seen));
 		let files = Arc::from(Mutex::new(files));
 
 		// Process until we're our of directories.
-		loop {
+		while ! dirs.is_empty() {
 			dirs = dirs.par_drain(..)
 				.flat_map(ParallelBridge::par_bridge)
 				.filter_map(resolve_dir_entry)
@@ -518,8 +513,6 @@ impl Dowser {
 					else { None }
 				)
 				.collect();
-
-			if dirs.is_empty() { break; }
 		}
 
 		// Unwrap and return.
