@@ -2,11 +2,25 @@
 
 
 
+## [0.3.5](https://github.com/Blobfolio/dowser/releases/tag/v0.3.5) - 2021-12-30
+
+### Added
+
+* `Dowser::with_capacity`
+* `Dowser::with_capacity_and_filter`
+* `Dowser::shallow`
+
+### Changed
+
+* Use `parking_lot` and `flume` for slightly faster processing.
+
+
+
 ## [0.3.4](https://github.com/Blobfolio/dowser/releases/tag/v0.3.4) - 2021-12-21
 
 ### Added
 
-* `dowser::Dowser::par_without_paths`
+* `Dowser::par_without_paths`
 
 ### Improved
 
@@ -17,8 +31,8 @@
 
 ### Added
 
-* `dowser::Dowser::without_paths`
-* `dowser::Dowser::without_path`
+* `Dowser::without_paths`
+* `Dowser::without_path`
 
 
 
@@ -26,7 +40,7 @@
 
 ### Added
 
-* `dowser::Dowser::into_vec`
+* `Dowser::into_vec`
 * `From<&OsStr>`
 * `From<&OsString>`
 * `From<&Path>`
