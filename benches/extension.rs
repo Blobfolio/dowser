@@ -39,5 +39,5 @@ benches!(
 
 	Bench::new("std::path", "extension(/usr/share/image.jpg)")
 		.timed(Duration::from_secs(2))
-		.with(|| test_std("/usr/share/image.jpg"))
+		.with(|| test_std("/usr/share/image.jpg")),
 );

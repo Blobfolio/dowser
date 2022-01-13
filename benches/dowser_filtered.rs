@@ -27,11 +27,11 @@ benches!(
 		.with(|| Dowser::filtered(cb).with_path("/usr/share/man").into_vec()),
 
 	Bench::new("dowser::Dowser", "regex(.gz)")
-		.with(|| Dowser::regex(r"(?i).+\.gz$").with_path("/usr/share/man").into_vec())
+		.with(|| Dowser::regex(r"(?i).+\.gz$").with_path("/usr/share/man").into_vec()),
 );
 
 #[cfg(not(feature = "regexp"))]
 benches!(
 	Bench::new("dowser::Dowser", "filtered(.gz)")
-		.with(|| Dowser::filtered(cb).with_path("/usr/share/man").into_vec())
+		.with(|| Dowser::filtered(cb).with_path("/usr/share/man").into_vec()),
 );
