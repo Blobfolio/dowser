@@ -2,6 +2,21 @@
 
 
 
+## [0.3.6](https://github.com/Blobfolio/dowser/releases/tag/v0.3.6) - 2022-01-29
+
+### Changed
+
+* Update dependencies;
+* Fix feature-dependent doctests;
+* Make `parking_lot` dependency optional (but still default);
+* Replace `flume` with `crossbeam-channel`;
+
+### Deprecated
+
+* `utility::du`
+
+
+
 ## [0.3.5](https://github.com/Blobfolio/dowser/releases/tag/v0.3.5) - 2021-12-30
 
 ### Added

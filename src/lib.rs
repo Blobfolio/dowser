@@ -6,18 +6,18 @@
 
 [`Dowser`] is a(nother) fast, multi-threaded, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
 
- * It is not limited to one root; any number of file and directory paths can be loaded and traversed en masse;
- * Symlinks and hidden directories are followed like any other, including across devices;
- * Matching file paths are canonicalized, deduped, and collected into a `Vec<PathBuf>`;
+* It is not limited to one root; any number of file and directory paths can be loaded and traversed en masse;
+* Symlinks and hidden directories are followed like any other, including across devices;
+* Matching file paths are canonicalized, deduped, and collected into a `Vec<PathBuf>`;
 
 If those things sound nice, this library might be a good fit.
 
 On the other hand, [`Dowser`] is optimized for just one particular type of searching:
 
- * File paths can be filtered via [`Dowser::filtered`] or [`Dowser::regex`], but directory paths cannot;
- * There are no settings for things like min/max depth, directory filtering, etc.;
- * It only returns *file* paths. Directories are crawled, but not returned in the set;
- * File uniqueness hashing relies on Unix metadata; **this library is not compatible with Windows**;
+* File paths can be filtered via [`Dowser::filtered`] or [`Dowser::regex`], but directory paths cannot;
+* There are no settings for things like min/max depth, directory filtering, etc.;
+* It only returns *file* paths. Directories are crawled, but not returned in the set;
+* File uniqueness hashing relies on Unix metadata; **this library is not compatible with Windows**;
 
 Depending on your needs, those limitations could be bad, in which case something like [`Walkdir`](https://crates.io/crates/walkdir) might make more sense.
 
@@ -36,9 +36,10 @@ dowser = "0.3.*"
 
 ## Features
 
-| Feature | Description |
-| ------- | ----------- |
-| `regexp` | Enable the [`Dowser::regex`] method, which allows for matching file paths (as bytes) against a regular expression. |
+| Feature | Description | Default |
+| ------- | ----------- | ------- |
+| `parking_lot_mutex` | Use [`parking_lot::Mutex`] instead of [`std::sync::Mutex`]. | Y |
+| `regexp` | Enable the [`Dowser::regex`] method, which allows for matching file paths (as bytes) against a regular expression. | N |
 
 To use this feature, alter the `Cargo.toml` bit to read:
 
@@ -72,11 +73,6 @@ let files = Vec::<PathBuf>::try_from(
    Dowser::default().with_path("/usr/share/man")
 ).expect("No files were found.");
 
-// Return only Gzipped files using regular expression.
-let files = Vec::<PathBuf>::try_from(
-    Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
-).expect("No files were found.");
-
 // Return only Gzipped files using callback filter.
 let files = Vec::<PathBuf>::try_from(
     Dowser::filtered(|p: &Path| p.extension()
@@ -88,6 +84,22 @@ let files = Vec::<PathBuf>::try_from(
     .with_path("/usr/share/man")
 ).expect("No files were found.");
 ```
+
+If compiled with the `regexp` flag, you can additionally filter by regular
+expression:
+
+```no_run,ignore
+use dowser::Dowser;
+use std::path::PathBuf;
+
+// Return only Gzipped files using regular expression.
+let files = Vec::<PathBuf>::try_from(
+    Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
+).expect("No files were found.");
+```
+
+Note: If you want a vector back no matter what — even if empty — you can
+use [`Dowser::into_vec`] instead of `TryFrom::<PathBuf>`.
 */
 
 #![forbid(unsafe_code)]

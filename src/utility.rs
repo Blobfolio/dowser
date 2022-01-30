@@ -10,6 +10,7 @@ use std::path::Path;
 
 
 
+#[deprecated(since = "0.3.6")]
 #[must_use]
 /// # Disk Usage
 ///
@@ -19,7 +20,7 @@ use std::path::Path;
 ///
 /// ## Examples
 ///
-/// ```no_run
+/// ```no_run,ignore
 /// let paths = vec![ "/path/one", "path/two", "path/three" ];
 /// let size = dowser::utility::du(&paths);
 /// ```
@@ -53,6 +54,7 @@ pub fn path_as_bytes(p: &Path) -> &[u8] {
 mod tests {
 	use super::*;
 
+	#[allow(deprecated)]
 	#[test]
 	fn t_du() {
 		let files = vec![

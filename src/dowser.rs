@@ -6,7 +6,10 @@ use crate::{
 	NoHashState,
 	NoHashU64,
 };
+
+#[cfg(feature = "parking_lot_mutex")]
 use parking_lot::Mutex;
+
 use rayon::iter::{
 	IntoParallelIterator,
 	ParallelBridge,
@@ -33,6 +36,9 @@ use std::{
 	},
 	sync::Arc,
 };
+
+#[cfg(not(feature = "parking_lot_mutex"))]
+use std::sync::Mutex;
 
 
 
@@ -96,11 +102,6 @@ impl DowserError {
 ///    Dowser::default().with_path("/usr/share/man")
 /// ).expect("No files were found.");
 ///
-/// // Return only Gzipped files using regular expression.
-/// let files = Vec::<PathBuf>::try_from(
-///     Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
-/// ).expect("No files were found.");
-///
 /// // Return only Gzipped files using callback filter.
 /// let files = Vec::<PathBuf>::try_from(
 ///     Dowser::filtered(|p: &Path| p.extension()
@@ -112,6 +113,22 @@ impl DowserError {
 ///     .with_path("/usr/share/man")
 /// ).expect("No files were found.");
 /// ```
+///
+/// If compiled with the `regexp` flag, you can additionally filter by regular
+/// expression:
+///
+/// ```no_run,ignore
+/// use dowser::Dowser;
+/// use std::path::PathBuf;
+///
+/// // Return only Gzipped files using regular expression.
+/// let files = Vec::<PathBuf>::try_from(
+///     Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
+/// ).expect("No files were found.");
+/// ```
+///
+/// Note: If you want a vector back no matter what — even if empty — you can
+/// use [`Dowser::into_vec`] instead of `TryFrom::<PathBuf>`.
 pub struct Dowser {
 	/// Directories to scan.
 	dirs: Vec<ReadDir>,
@@ -549,7 +566,7 @@ impl Dowser {
 
 		// Process until we're our of directories.
 		while ! dirs.is_empty() {
-			let (tx, rx) = flume::unbounded();
+			let (tx, rx) = crossbeam_channel::unbounded();
 
 			files.par_extend(
 				dirs.par_drain(..)
@@ -642,7 +659,13 @@ fn resolve_dir_entry(
 	let entry = entry.ok()?;
 	let (h, is_dir, path) = resolve_path(entry.path(), true)?;
 
-	if seen.lock().insert(h) { Some((is_dir, path)) }
+	#[cfg(feature = "parking_lot_mutex")]
+	let mut ptr = seen.lock();
+
+	#[cfg(not(feature = "parking_lot_mutex"))]
+	let mut ptr = seen.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+
+	if ptr.insert(h) { Some((is_dir, path)) }
 	else { None }
 }
 
