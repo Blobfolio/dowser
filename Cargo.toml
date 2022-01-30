@@ -33,11 +33,11 @@ credits-dir = "./"
 
 [dependencies]
 ahash = "0.7.*"
-parking_lot = "0.11.*"
+parking_lot = "0.12.*"
 rayon = "1.5.*"
 
 [dependencies.flume]
-version = "0.10.9"
+version = "0.10.*"
 default-features = false
 
 [dependencies.regex]
