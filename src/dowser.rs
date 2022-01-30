@@ -566,7 +566,7 @@ impl Dowser {
 
 		// Process until we're our of directories.
 		while ! dirs.is_empty() {
-			let (tx, rx) = flume::unbounded();
+			let (tx, rx) = crossbeam_channel::unbounded();
 
 			files.par_extend(
 				dirs.par_drain(..)

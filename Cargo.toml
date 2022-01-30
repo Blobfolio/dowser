@@ -33,11 +33,8 @@ credits-dir = "./"
 
 [dependencies]
 ahash = "0.7.*"
+crossbeam-channel = "0.5.*"
 rayon = "1.5.*"
-
-[dependencies.flume]
-version = "0.10.*"
-default-features = false
 
 [dependencies.parking_lot]
 version = "0.12.*"
