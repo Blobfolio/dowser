@@ -96,11 +96,6 @@ impl DowserError {
 ///    Dowser::default().with_path("/usr/share/man")
 /// ).expect("No files were found.");
 ///
-/// // Return only Gzipped files using regular expression.
-/// let files = Vec::<PathBuf>::try_from(
-///     Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
-/// ).expect("No files were found.");
-///
 /// // Return only Gzipped files using callback filter.
 /// let files = Vec::<PathBuf>::try_from(
 ///     Dowser::filtered(|p: &Path| p.extension()
@@ -112,6 +107,22 @@ impl DowserError {
 ///     .with_path("/usr/share/man")
 /// ).expect("No files were found.");
 /// ```
+///
+/// If compiled with the `regexp` flag, you can additionally filter by regular
+/// expression:
+///
+/// ```no_run,ignore
+/// use dowser::Dowser;
+/// use std::path::PathBuf;
+///
+/// // Return only Gzipped files using regular expression.
+/// let files = Vec::<PathBuf>::try_from(
+///     Dowser::regex(r"(?i)[^/]+\.gz$").with_path("/usr/share/man")
+/// ).expect("No files were found.");
+/// ```
+///
+/// Note: If you want a vector back no matter what — even if empty — you can
+/// use [`Dowser::into_vec`] instead of `TryFrom::<PathBuf>`.
 pub struct Dowser {
 	/// Directories to scan.
 	dirs: Vec<ReadDir>,
