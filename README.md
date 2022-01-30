@@ -37,9 +37,10 @@ dowser = "0.3.*"
 
 ## Features
 
-| Feature | Description |
-| ------- | ----------- |
-| `regexp` | Enable the [`Dowser::regex`] method, which allows for matching file paths (as bytes) against a regular expression. |
+| Feature | Description | Default |
+| ------- | ----------- | ------- |
+| `parking_lot_mutex` | Use [`parking_lot::Mutex`] instead of [`std::sync::Mutex`]. | Y |
+| `regexp` | Enable the [`Dowser::regex`] method, which allows for matching file paths (as bytes) against a regular expression. | N |
 
 To use this feature, alter the `Cargo.toml` bit to read:
 

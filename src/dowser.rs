@@ -6,7 +6,10 @@ use crate::{
 	NoHashState,
 	NoHashU64,
 };
+
+#[cfg(feature = "parking_lot_mutex")]
 use parking_lot::Mutex;
+
 use rayon::iter::{
 	IntoParallelIterator,
 	ParallelBridge,
@@ -33,6 +36,9 @@ use std::{
 	},
 	sync::Arc,
 };
+
+#[cfg(not(feature = "parking_lot_mutex"))]
+use std::sync::Mutex;
 
 
 
@@ -653,7 +659,13 @@ fn resolve_dir_entry(
 	let entry = entry.ok()?;
 	let (h, is_dir, path) = resolve_path(entry.path(), true)?;
 
-	if seen.lock().insert(h) { Some((is_dir, path)) }
+	#[cfg(feature = "parking_lot_mutex")]
+	let mut ptr = seen.lock();
+
+	#[cfg(not(feature = "parking_lot_mutex"))]
+	let mut ptr = seen.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+
+	if ptr.insert(h) { Some((is_dir, path)) }
 	else { None }
 }
 
