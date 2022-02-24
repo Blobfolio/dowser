@@ -334,6 +334,7 @@ impl Dowser {
 	}
 
 	#[inline]
+	#[must_use]
 	/// # Filtered via Callback.
 	///
 	/// Define a custom filter callback to determine whether or not a given
@@ -360,6 +361,7 @@ impl Dowser {
 
 	#[cfg(feature = "regexp")]
 	#[inline]
+	#[must_use]
 	/// # Filtered via Regex.
 	///
 	/// This is a convenience method for filtering files by regular expression.
@@ -401,6 +403,7 @@ impl Dowser {
 /// # Adding Path(s).
 impl Dowser {
 	#[inline]
+	#[must_use]
 	/// # With Paths.
 	///
 	/// Append files and/or directories to the finder. File paths will be
@@ -432,6 +435,7 @@ impl Dowser {
 		paths.into_iter().fold(self, Self::with_path)
 	}
 
+	#[must_use]
 	/// # Without Paths.
 	///
 	/// This will prevent the provided directories or files from being crawled
@@ -462,6 +466,7 @@ impl Dowser {
 		self
 	}
 
+	#[must_use]
 	/// # Without Paths (Parallel).
 	///
 	/// This is a multi-threaded version of [`Dowser::without_paths`]. If you
@@ -479,6 +484,7 @@ impl Dowser {
 		self
 	}
 
+	#[must_use]
 	/// # With Path.
 	///
 	/// Add a path to the finder. If the path is a file, it will be checked
@@ -514,6 +520,7 @@ impl Dowser {
 		self
 	}
 
+	#[must_use]
 	/// # Without Path.
 	///
 	/// This will prevent the provided directory or file from being crawled or
