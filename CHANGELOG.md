@@ -2,6 +2,15 @@
 
 
 
+## [0.4.0](https://github.com/Blobfolio/dowser/releases/tag/v0.4.0) - TBD
+
+### Removed
+
+* `dowser::dowse`
+* `utility::du`
+
+
+
 ## [0.3.6](https://github.com/Blobfolio/dowser/releases/tag/v0.3.6) - 2022-01-29
 
 ### Changed
