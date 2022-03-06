@@ -4,6 +4,10 @@
 
 ## [0.4.0](https://github.com/Blobfolio/dowser/releases/tag/v0.4.0) - TBD
 
+### Added
+
+* impl `Hash` for `Extension`;
+
 ### Removed
 
 * `dowser::dowse`
