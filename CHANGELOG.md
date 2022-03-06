@@ -6,7 +6,8 @@
 
 ### Added
 
-* impl `Hash` for `Extension`;
+* impl `Hash` for `Extension`
+* `Dowser::into_vec_serial`
 
 ### Removed
 

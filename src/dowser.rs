@@ -90,6 +90,19 @@ impl DowserError {
 /// are found, an error is returned, otherwise the matching file paths are
 /// collected into a vector.
 ///
+/// ## Ulimit
+///
+/// Multi-threaded filesystem crawling is great and all, but can run into
+/// problems when there are a ton of files and the user executing the search
+/// has a low `ulimit` configured for their account.
+///
+/// If you are seeing inconsistent search results — different totals from run
+/// to run — you are likely hitting just such a limit.
+///
+/// In such cases, you should either increase your `ulimit` — refer to your OS
+/// instructions for that — or use [`Dowser::into_vec_serial`], which executes
+/// a single-threaded crawl, mooting the issue entirely.
+///
 /// ## Examples
 ///
 /// ```no_run
@@ -602,6 +615,38 @@ impl Dowser {
 	}
 
 	#[must_use]
+	/// # Into Vec (serial).
+	///
+	/// Multi-threaded crawling is great, but can run into issues with `ulimit`
+	/// caps and similar, leading to inconsistent results when there are a lot
+	/// of them.
+	///
+	/// This version processes everything in serial, hopefully negating such
+	/// issues.
+	pub fn into_vec_serial(self) -> Vec<PathBuf> {
+		let Dowser { mut dirs, mut files, mut seen, cb } = self;
+		while let Some(rd) = dirs.pop() {
+			for e in rd.filter_map(Result::ok) {
+				if let Some((h, is_dir, path)) = resolve_path(e.path(), true) {
+					if seen.insert(h) {
+						if is_dir {
+							if let Ok(rd) = std::fs::read_dir(path) {
+								dirs.push(rd);
+							}
+						}
+						else if cb(&path) {
+							files.push(path);
+						}
+					}
+				}
+			}
+		}
+
+		files
+	}
+
+
+	#[must_use]
 	/// # Shallow Search.
 	///
 	/// This works like [`Dowser::into_vec`] but without the recursion; only
@@ -776,6 +821,20 @@ mod tests {
 		).expect("Missing /tests directory.");
 		assert!(! w1.is_empty());
 		assert_eq!(w1.len(), 1);
+
+		// Make sure parallel and serial pull the same results. This is a small
+		// set and should work consistently even with heavy caps...
+		let mut par = Dowser::default()
+			.with_path(PathBuf::from("tests/"))
+			.into_vec();
+		par.sort();
+
+		let mut serial = Dowser::default()
+			.with_path(PathBuf::from("tests/"))
+			.into_vec_serial();
+		serial.sort();
+
+		assert_eq!(par, serial, "Parallel and serial results differed; is ulimit a problem?");
 	}
 
 	#[test]
