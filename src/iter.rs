@@ -550,8 +550,8 @@ mod tests {
 		let abs_p2 = abs_dir.with_file_name("is-executable.sh");
 		let abs_perr = abs_dir.with_file_name("foo.bar");
 
-		// Do a non-search search.
-		let w1: Vec<PathBuf> = Dowser::default()
+		// Builder init.
+		let mut w1: Vec<PathBuf> = Dowser::default()
 			.with_path(PathBuf::from("tests/"))
 			.collect();
 		assert!(! w1.is_empty());
@@ -559,6 +559,12 @@ mod tests {
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
 		assert!(! w1.contains(&abs_perr));
+
+		// From init.
+		let mut w2: Vec<PathBuf> = Dowser::from(PathBuf::from("tests/")).collect();
+		w1.sort();
+		w2.sort();
+		assert_eq!(w1, w2);
 	}
 
 	#[test]
