@@ -1,6 +1,6 @@
 [package]
 name = "dowser"
-version = "0.3.6"
+version = "0.4.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.56"
@@ -40,19 +40,11 @@ rayon = "1.5.*"
 version = "0.12.*"
 optional = true
 
-[dependencies.regex]
-version = "1.5.*"
-optional = true
-
 [dev-dependencies]
 brunch = "0.2.*"
 
 [[bench]]
 name = "dowser"
-harness = false
-
-[[bench]]
-name = "dowser_filtered"
 harness = false
 
 [[bench]]
@@ -65,6 +57,3 @@ default = [ "parking_lot_mutex" ]
 # Use parking_lot's Mutex instead of std's. The parking_lot version should be
 # a bit faster in most cases, but does pull down a few extra dependencies.
 parking_lot_mutex = [ "parking_lot" ]
-
-# Enable Regex matching in Dowser.
-regexp = [ "regex" ]

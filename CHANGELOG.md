@@ -2,6 +2,25 @@
 
 
 
+## [0.4.0](https://github.com/Blobfolio/dowser/releases/tag/v0.4.0) - TBD
+
+This release contains breaking changes:
+
+`dowser::Dowser` has been refactored into a proper `Iterator<Item=PathBuf>`. The struct-specific filters and `regexp` crate feature have been removed.
+
+This version is slightly slower than `0.3.x`, but should be a lot more flexible, while also being less likely to run into `ulimit` system caps.
+
+### Added
+
+* impl `Hash` for `Extension`
+
+### Removed
+
+* `dowser::dowse`
+* `utility::du`
+
+
+
 ## [0.3.6](https://github.com/Blobfolio/dowser/releases/tag/v0.3.6) - 2022-01-29
 
 ### Changed

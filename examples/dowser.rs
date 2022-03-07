@@ -7,7 +7,7 @@ use dowser::{
 	Extension,
 };
 use std::{
-	path::Path,
+	path::PathBuf,
 	time::Instant,
 };
 
@@ -17,9 +17,13 @@ fn main() {
 
 	// Search for gzipped MAN pages.
 	let now = Instant::now();
-	let files = Dowser::filtered(|p: &Path| Extension::try_from2(p).map_or(false, |p| p == EXT))
+	let files: Vec<PathBuf> = Dowser::default()
 		.with_path("/usr/share")
-		.into_vec();
+		.filter_map(|p|
+			if Some(EXT) == Extension::try_from2(&p) { Some(p) }
+			else { None }
+		)
+		.collect();
 
 	println!("Search took {} seconds.", now.elapsed().as_millis() as f64 / 1000.0);
 

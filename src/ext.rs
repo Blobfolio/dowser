@@ -3,13 +3,17 @@
 */
 
 use std::{
+	hash::{
+		Hash,
+		Hasher,
+	},
 	os::unix::ffi::OsStrExt,
 	path::Path,
 };
 
 
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy)]
 /// # Extension.
 ///
 /// This enum can be used to efficiently check a file path's extension case-
@@ -115,6 +119,29 @@ pub enum Extension {
 	///
 	/// Like `.jpeg`.
 	Ext4(u32),
+}
+
+impl Eq for Extension {}
+
+impl Hash for Extension {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		match *self {
+			Self::Ext2(n) => { state.write_u16(n); },
+			Self::Ext3(n) | Self::Ext4(n) => { state.write_u32(n); },
+		}
+	}
+}
+
+impl PartialEq for Extension {
+	#[inline]
+	fn eq(&self, other: &Self) -> bool {
+		match (*self, *other) {
+			(Self::Ext2(e1), Self::Ext2(e2)) => e1 == e2,
+			(Self::Ext3(e1), Self::Ext3(e2)) |
+			(Self::Ext4(e1), Self::Ext4(e2)) => e1 == e2,
+			_ => false,
+		}
+	}
 }
 
 impl<P> PartialEq<P> for Extension
