@@ -27,8 +27,7 @@ where P: AsRef<Path> {
 /// # Dowser.
 fn test_dowser<P>(path: P) -> bool
 where P: AsRef<Path> {
-	Extension::try_from3(path)
-		.map_or(false, |p| p == JPG_EXT)
+	Some(JPG_EXT) == Extension::try_from3(path)
 }
 
 

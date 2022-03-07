@@ -71,7 +71,7 @@ use std::sync::Mutex;
 /// ## Examples
 ///
 /// ```no_run
-/// use dowser::iter::Dowser;
+/// use dowser::Dowser;
 /// use std::path::PathBuf;
 ///
 /// let files: Vec<PathBuf> = Dowser::default()
@@ -214,7 +214,7 @@ impl Dowser {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use dowser::iter::Dowser;
+	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
 	/// let files: Vec::<PathBuf> = Dowser::default()
@@ -239,7 +239,7 @@ impl Dowser {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use dowser::iter::Dowser;
+	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
 	/// let files: Vec::<PathBuf> = Dowser::default()
@@ -272,7 +272,7 @@ impl Dowser {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use dowser::iter::Dowser;
+	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
 	/// let files: Vec<PathBuf> = Dowser::default()
@@ -302,7 +302,7 @@ impl Dowser {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use dowser::iter::Dowser;
+	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
 	/// let files: Vec<PathBuf> = Dowser::default()
@@ -336,7 +336,7 @@ impl Dowser {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use dowser::iter::Dowser;
+	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
 	/// let files: Vec<PathBuf> = Dowser::default()
