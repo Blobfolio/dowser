@@ -98,6 +98,81 @@ impl Default for Dowser {
 	}
 }
 
+impl From<PathBuf> for Dowser {
+	fn from(src: PathBuf) -> Self {
+		if let Some((h, is_dir, p)) = resolve_path(src, false) {
+			let mut seen = HashSet::with_capacity_and_hasher(4096, NoHashState::default());
+			seen.insert(h);
+
+			let mut dirs = Vec::with_capacity(8);
+			let mut files = Vec::with_capacity(8);
+
+			if is_dir { dirs.push(p); }
+			else { files.push(p); }
+
+			Self {
+				files,
+				dirs,
+				threads: dowser_threads(),
+				seen: Arc::new(Mutex::new(seen)),
+			}
+		}
+		else { Self::default() }
+	}
+}
+
+impl From<&Path> for Dowser {
+	fn from(src: &Path) -> Self { Self::from(src.to_path_buf()) }
+}
+
+impl From<&PathBuf> for Dowser {
+	fn from(src: &PathBuf) -> Self { Self::from(src.clone()) }
+}
+
+impl From<&[PathBuf]> for Dowser {
+	fn from(src: &[PathBuf]) -> Self {
+		let mut seen = HashSet::with_capacity_and_hasher(4096, NoHashState::default());
+		let mut dirs = Vec::with_capacity(8);
+		let mut files = Vec::with_capacity(8);
+
+		for (h, is_dir, p) in src.iter().filter_map(|p| resolve_path(p.clone(), false)) {
+			if seen.insert(h) {
+				if is_dir { dirs.push(p); }
+				else { files.push(p); }
+			}
+		}
+
+		Self {
+			files,
+			dirs,
+			threads: dowser_threads(),
+			seen: Arc::new(Mutex::new(seen)),
+		}
+	}
+}
+
+impl From<Vec<PathBuf>> for Dowser {
+	fn from(src: Vec<PathBuf>) -> Self {
+		let mut seen = HashSet::with_capacity_and_hasher(4096, NoHashState::default());
+		let mut dirs = Vec::with_capacity(8);
+		let mut files = Vec::with_capacity(8);
+
+		for (h, is_dir, p) in src.into_iter().filter_map(|p| resolve_path(p, false)) {
+			if seen.insert(h) {
+				if is_dir { dirs.push(p); }
+				else { files.push(p); }
+			}
+		}
+
+		Self {
+			files,
+			dirs,
+			threads: dowser_threads(),
+			seen: Arc::new(Mutex::new(seen)),
+		}
+	}
+}
+
 impl Iterator for Dowser {
 	type Item = PathBuf;
 
