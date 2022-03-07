@@ -129,16 +129,13 @@ use [`Dowser::into_vec`] instead of `TryFrom::<PathBuf>`.
 
 
 mod ext;
-mod dowser;
 mod hash;
+mod iter;
 pub mod utility;
 
 
 
-pub use self::dowser::{
-	Dowser,
-	DowserError,
-};
+pub use iter::Dowser;
 pub use ext::Extension;
 
 #[doc(hidden)]
