@@ -2,6 +2,14 @@
 
 
 
+## [0.4.2](https://github.com/Blobfolio/dowser/releases/tag/v0.4.2) - 2022-03-08
+
+### Changed
+
+* Minor performance improvements.
+
+
+
 ## [0.4.0](https://github.com/Blobfolio/dowser/releases/tag/v0.4.0) - 2022-03-07
 
 This release contains breaking changes:

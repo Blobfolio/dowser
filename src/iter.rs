@@ -11,25 +11,31 @@ use crate::{
 use parking_lot::Mutex;
 
 use rayon::iter::{
+	IntoParallelIterator,
 	ParallelBridge,
-	ParallelDrainRange,
-	ParallelExtend,
 	ParallelIterator,
 };
 use std::{
 	collections::HashSet,
-	fs::DirEntry,
 	os::unix::fs::MetadataExt,
 	path::{
 		Path,
 		PathBuf,
 	},
-	sync::Arc,
 };
 
 #[cfg(not(feature = "parking_lot_mutex"))]
 use std::sync::Mutex;
 
+
+
+#[cfg(feature = "parking_lot_mutex")]
+/// # Helper: Unlock Mutex.
+macro_rules! mutex { ($var:expr) => ($var.lock()); }
+
+#[cfg(not(feature = "parking_lot_mutex"))]
+/// # Helper: Unlock Mutex.
+macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner)); }
 
 
 
@@ -84,7 +90,7 @@ pub struct Dowser {
 	files: Vec<PathBuf>,
 	dirs: Vec<PathBuf>,
 	threads: usize,
-	seen: Arc<Mutex<HashSet<u64, NoHashState>>>,
+	seen: HashSet<u64, NoHashState>,
 }
 
 impl Default for Dowser {
@@ -93,7 +99,7 @@ impl Default for Dowser {
 			files: Vec::with_capacity(8),
 			dirs: Vec::with_capacity(8),
 			threads: dowser_threads(),
-			seen: Arc::new(Mutex::new(HashSet::with_capacity_and_hasher(4096, NoHashState::default()))),
+			seen: HashSet::with_capacity_and_hasher(4096, NoHashState::default()),
 		}
 	}
 }
@@ -114,7 +120,7 @@ impl From<PathBuf> for Dowser {
 				files,
 				dirs,
 				threads: dowser_threads(),
-				seen: Arc::new(Mutex::new(seen)),
+				seen,
 			}
 		}
 		else { Self::default() }
@@ -146,7 +152,7 @@ impl From<&[PathBuf]> for Dowser {
 			files,
 			dirs,
 			threads: dowser_threads(),
-			seen: Arc::new(Mutex::new(seen)),
+			seen,
 		}
 	}
 }
@@ -168,7 +174,7 @@ impl From<Vec<PathBuf>> for Dowser {
 			files,
 			dirs,
 			threads: dowser_threads(),
-			seen: Arc::new(Mutex::new(seen)),
+			seen,
 		}
 	}
 }
@@ -203,46 +209,25 @@ impl Iterator for Dowser {
 }
 
 impl Dowser {
-	#[cfg(feature = "parking_lot_mutex")]
-	/// # Push Hash.
-	///
-	/// This verifies a particular hash hasn't been seen yet, returning `true`
-	/// if it's worth pursuing.
-	fn push_hash(&self, hash: u64) -> bool { self.seen.lock().insert(hash) }
-
-	#[cfg(not(feature = "parking_lot_mutex"))]
-	/// # Push Hash.
-	///
-	/// This verifies a particular hash hasn't been seen yet, returning `true`
-	/// if it's worth pursuing.
-	fn push_hash(&self, hash: u64) -> bool {
-		self.seen.lock()
-			.unwrap_or_else(std::sync::PoisonError::into_inner)
-			.insert(hash)
-	}
-
 	/// # Crunch One.
 	///
 	/// This reads the final directory in the queue when there is only one.
 	fn crawl(&mut self) {
 		if let Some(p) = self.dirs.pop() {
 			if let Ok(rd) = std::fs::read_dir(p) {
-				let (tx, rx) = crossbeam_channel::unbounded();
+				let seen = Mutex::new(&mut self.seen);
+				let f = Mutex::new(&mut self.files);
+				let d = Mutex::new(&mut self.dirs);
 
-				self.files.par_extend(
-					rd.par_bridge()
-						.filter_map(|e| resolve_dir_entry(e, &self.seen))
-						.filter_map(|(is_dir, p)|
-							if is_dir {
-								let _res = tx.send(p);
-								None
+				rd.par_bridge()
+					.for_each(|e| if let Ok(e) = e {
+						if let Some((h, is_dir, p)) = resolve_path(e.path(), true) {
+							if mutex!(seen).insert(h) {
+								if is_dir { mutex!(d).push(p); }
+								else { mutex!(f).push(p); }
 							}
-							else { Some(p) }
-						)
-				);
-
-				drop(tx);
-				self.dirs.extend(rx);
+						}
+					});
 			}
 		}
 	}
@@ -252,25 +237,24 @@ impl Dowser {
 	/// This reads multiple directories — but maybe not _all_ — in the queue,
 	/// using multiple threads to spread the effort out a bit.
 	fn crawl_n(&mut self, n: usize) {
-		let (tx, rx) = crossbeam_channel::unbounded();
-		let start = self.dirs.len() - n;
+		// Split off so we can write right back to self.dirs during iteration.
+		let new = self.dirs.split_off(self.dirs.len() - n);
 
-		self.files.par_extend(
-			self.dirs.par_drain(start..)
-				.filter_map(|p| std::fs::read_dir(p).ok())
-				.flat_map(ParallelBridge::par_bridge)
-				.filter_map(|e| resolve_dir_entry(e, &self.seen))
-				.filter_map(|(is_dir, p)|
-					if is_dir {
-						let _res = tx.send(p);
-						None
+		let seen = Mutex::new(&mut self.seen);
+		let f = Mutex::new(&mut self.files);
+		let d = Mutex::new(&mut self.dirs);
+
+		new.into_par_iter()
+			.filter_map(|p| std::fs::read_dir(p).ok())
+			.flat_map(ParallelBridge::par_bridge)
+			.for_each(|e| if let Ok(e) = e {
+				if let Some((h, is_dir, p)) = resolve_path(e.path(), true) {
+					if mutex!(seen).insert(h) {
+						if is_dir { mutex!(d).push(p); }
+						else { mutex!(f).push(p); }
 					}
-					else { Some(p) }
-				)
-		);
-
-		drop(tx);
-		self.dirs.extend(rx);
+				}
+			});
 	}
 }
 
@@ -324,7 +308,7 @@ impl Dowser {
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
 		if let Some((h, is_dir, p)) = resolve_path(PathBuf::from(path.as_ref()), false) {
-			if self.push_hash(h) {
+			if self.seen.insert(h) {
 				if is_dir { self.dirs.push(p); }
 				else { self.files.push(p); }
 			}
@@ -355,16 +339,15 @@ impl Dowser {
 	///     .with_path("/my/dir")
 	///     .collect();
 	/// ```
-	pub fn without_path<P>(self, path: P) -> Self
+	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
 		if let Some(h) = resolve_path_hash(path.as_ref()) {
-			self.push_hash(h);
+			self.seen.insert(h);
 		}
 
 		self
 	}
 
-	#[cfg(feature = "parking_lot_mutex")]
 	#[must_use]
 	/// # Without Paths.
 	///
@@ -385,51 +368,14 @@ impl Dowser {
 	///     .with_path("/my/dir")
 	///     .collect();
 	/// ```
-	pub fn without_paths<P, I>(self, paths: I) -> Self
+	pub fn without_paths<P, I>(mut self, paths: I) -> Self
 	where
 		P: AsRef<Path>,
 		I: IntoIterator<Item=P> {
-		self.seen.lock()
-			.extend(
-				paths.into_iter()
-					.filter_map(|p| resolve_path_hash(p.as_ref()))
-			);
-
-		self
-	}
-
-	#[cfg(not(feature = "parking_lot_mutex"))]
-	#[must_use]
-	/// # Without Paths.
-	///
-	/// This will prevent the provided directories or files from being crawled
-	/// or included in the output.
-	///
-	/// Note: without-path(s) should be specified before with-path(s), just in
-	/// case the sets overlap.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// let files: Vec<PathBuf> = Dowser::default()
-	///     .without_paths(&["/my/dir/ignore"])
-	///     .with_path("/my/dir")
-	///     .collect();
-	/// ```
-	pub fn without_paths<P, I>(self, paths: I) -> Self
-	where
-		P: AsRef<Path>,
-		I: IntoIterator<Item=P> {
-
-		self.seen.lock()
-			.unwrap_or_else(std::sync::PoisonError::into_inner)
-			.extend(
-				paths.into_iter()
-					.filter_map(|p| resolve_path_hash(p.as_ref()))
-			);
+		self.seen.extend(
+			paths.into_iter()
+				.filter_map(|p| resolve_path_hash(p.as_ref()))
+		);
 
 		self
 	}
@@ -448,44 +394,6 @@ fn dowser_threads() -> usize {
 		0..=2 => 1,
 		n => usize::min(n - 1, 8),
 	}
-}
-
-#[cfg(feature = "parking_lot_mutex")]
-/// # Resolve `DirEntry`.
-///
-/// This is a convenience callback for [`Dowser`] used during `ReadDir`
-/// traversal.
-///
-/// See [`resolve_path`] for more information.
-fn resolve_dir_entry(
-	entry: Result<DirEntry, std::io::Error>,
-	seen: &Arc<Mutex<HashSet<u64, NoHashState>>>
-) -> Option<(bool, PathBuf)> {
-	let entry = entry.ok()?;
-	let (h, is_dir, path) = resolve_path(entry.path(), true)?;
-
-	if seen.lock().insert(h) { Some((is_dir, path)) }
-	else { None }
-}
-
-#[cfg(not(feature = "parking_lot_mutex"))]
-/// # Resolve `DirEntry`.
-///
-/// This is a convenience callback for [`Dowser`] used during `ReadDir`
-/// traversal.
-///
-/// See [`resolve_path`] for more information.
-fn resolve_dir_entry(
-	entry: Result<DirEntry, std::io::Error>,
-	seen: &Arc<Mutex<HashSet<u64, NoHashState>>>
-) -> Option<(bool, PathBuf)> {
-	let entry = entry.ok()?;
-	let (h, is_dir, path) = resolve_path(entry.path(), true)?;
-
-	if seen.lock().unwrap_or_else(std::sync::PoisonError::into_inner).insert(h) {
-		Some((is_dir, path))
-	}
-	else { None }
 }
 
 /// # Resolve Path.
