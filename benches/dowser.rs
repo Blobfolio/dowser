@@ -8,12 +8,12 @@ use brunch::{
 };
 use dowser::Dowser;
 use std::{
-	path::PathBuf,
+	path::Path,
 	time::Duration,
 };
 
 benches!(
 	Bench::new("dowser::Dowser", "from(/usr/share)")
 		.timed(Duration::from_secs(6))
-		.with(|| Dowser::from(PathBuf::from("/usr/share")).collect::<Vec<_>>()),
+		.with(|| Dowser::from(Path::new("/usr/share")).collect::<Vec<_>>()),
 );
