@@ -2,10 +2,7 @@
 # Dowser: Dowser
 */
 
-use crate::{
-	NoHashState,
-	NoHashU64,
-};
+use crate::NoHashState;
 
 #[cfg(feature = "parking_lot_mutex")]
 use parking_lot::Mutex;
@@ -18,6 +15,7 @@ use rayon::iter::{
 use std::{
 	collections::HashSet,
 	fs::DirEntry,
+	hash::Hasher,
 	os::unix::fs::MetadataExt,
 	path::{
 		Path,
@@ -37,6 +35,14 @@ macro_rules! mutex { ($var:expr) => ($var.lock()); }
 #[cfg(not(feature = "parking_lot_mutex"))]
 /// # Helper: Unlock Mutex.
 macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner)); }
+
+
+
+/// # Resolved Path.
+///
+/// This tuple represents the hash, whether or not it is a directory, and the
+/// canonical path.
+type Resolved = (u64, bool, PathBuf);
 
 
 
@@ -457,6 +463,14 @@ fn dowser_threads() -> usize {
 	}
 }
 
+/// # Hash Path.
+fn hash_path(dev: u64, ino: u64) -> u64 {
+	let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
+	hasher.write_u64(dev);
+	hasher.write_u64(ino);
+	hasher.finish()
+}
+
 /// # Resolve Entry Result.
 ///
 /// This is like `resolve_path`, except it assumes that any non-symlink entry
@@ -464,7 +478,7 @@ fn dowser_threads() -> usize {
 ///
 /// Symlinks get passed to `resolve_path`, ensuring they're fully
 /// canonicalized.
-fn resolve_entry(e: Result<DirEntry, std::io::Error>) -> Option<(u64, bool, PathBuf)> {
+fn resolve_entry(e: Result<DirEntry, std::io::Error>) -> Option<Resolved> {
 	let e = e.ok()?;
 
 	// If this is a symlink, we have to follow it.
@@ -474,7 +488,7 @@ fn resolve_entry(e: Result<DirEntry, std::io::Error>) -> Option<(u64, bool, Path
 
 	let meta = e.metadata().ok()?;
 	let path = e.path();
-	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	let hash: u64 = hash_path(meta.dev(), meta.ino());
 	Some((hash, meta.is_dir(), path))
 }
 
@@ -484,10 +498,10 @@ fn resolve_entry(e: Result<DirEntry, std::io::Error>) -> Option<(u64, bool, Path
 /// * A unique hash derived from the path's device and inode.
 /// * A bool indicating whether or not the path is a directory.
 /// * The canonicalized path.
-fn resolve_path(path: PathBuf) -> Option<(u64, bool, PathBuf)> {
+fn resolve_path(path: PathBuf) -> Option<Resolved> {
 	let path = std::fs::canonicalize(path).ok()?;
 	let meta = std::fs::metadata(&path).ok()?;
-	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	let hash: u64 = hash_path(meta.dev(), meta.ino());
 	Some((hash, meta.is_dir(), path))
 }
 
@@ -499,13 +513,13 @@ fn resolve_path(path: PathBuf) -> Option<(u64, bool, PathBuf)> {
 fn resolve_path_hash(path: &Path) -> Option<u64> {
 	if let Ok(meta) = std::fs::symlink_metadata(&path) {
 		if ! meta.file_type().is_symlink() {
-			return Some(NoHashU64::hash_path(meta.dev(), meta.ino()));
+			return Some(hash_path(meta.dev(), meta.ino()));
 		}
 	}
 
 	let path = std::fs::canonicalize(path).ok()?;
 	let meta = std::fs::metadata(&path).ok()?;
-	Some(NoHashU64::hash_path(meta.dev(), meta.ino()))
+	Some(hash_path(meta.dev(), meta.ino()))
 }
 
 

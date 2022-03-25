@@ -124,7 +124,4 @@ pub use iter::Dowser;
 pub use ext::Extension;
 
 #[doc(hidden)]
-pub(crate) use hash::{
-	NoHashU64,
-	NoHashState,
-};
+pub(crate) use hash::NoHashState;
