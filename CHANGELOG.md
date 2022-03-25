@@ -6,7 +6,8 @@
 
 ### Added
 
-* impl `Clone` for `Dowser`.
+* impl `Clone` for `Dowser`
+* `Dowser::into_vec`
 
 
 

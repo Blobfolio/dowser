@@ -381,6 +381,72 @@ impl Dowser {
 	}
 }
 
+impl Dowser {
+	#[must_use]
+	/// # Consume Into Vec (Filtered).
+	///
+	/// This method is an optimized alternative to running
+	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
+	///
+	/// It yields the same results as the above, but makes fewer allocations
+	/// along the way and applies your filter callback in parallel.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::{Dowser, Extension};
+	/// use std::path::PathBuf;
+	///
+	/// const GZ: Extension = Extension::new2(*b"gz");
+	///
+	/// // The iterator way.
+	/// let files: Vec<PathBuf> = Dowser::default()
+	///     .with_path("/usr/share")
+	///     .filter(|p| Some(GZ) == Extension::try_from2(p))
+	///     .collect();
+	///
+	/// // The optimized way.
+	/// let files: Vec<PathBuf> = Dowser::default()
+	///     .with_path("/usr/share")
+	///     .into_vec(|p| Some(GZ) == Extension::try_from2(p));
+	/// ```
+	pub fn into_vec<F>(self, cb: F) -> Vec<PathBuf>
+	where F: Fn(&Path) -> bool + Sync + Send {
+		let Self { mut files, mut dirs, threads, mut seen } = self;
+
+		// We wouldn't have had a chance to filter these yet.
+		if ! files.is_empty() {
+			files.retain(|p| cb(p));
+		}
+
+		// Consume!
+		{
+			let s = Mutex::new(&mut seen);
+			let f = Mutex::new(&mut files);
+
+			while ! dirs.is_empty() {
+				let new = dirs.split_off(dirs.len().saturating_sub(threads));
+				let d = Mutex::new(&mut dirs);
+
+				new.into_par_iter()
+					.filter_map(|p| std::fs::read_dir(p).ok())
+					.flat_map(ParallelBridge::par_bridge)
+					.for_each(|e| if let Ok(e) = e {
+						if let Some((h, is_dir, p)) = resolve_path(e.path(), true) {
+							if mutex!(s).insert(h) {
+								if is_dir { mutex!(d).push(p); }
+								else if cb(&p) { mutex!(f).push(p); }
+							}
+						}
+					});
+			}
+		}
+
+		// Done!
+		files
+	}
+}
+
 
 
 #[inline]
