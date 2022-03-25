@@ -17,6 +17,7 @@ use rayon::iter::{
 };
 use std::{
 	collections::HashSet,
+	fs::DirEntry,
 	os::unix::fs::MetadataExt,
 	path::{
 		Path,
@@ -106,7 +107,7 @@ impl Default for Dowser {
 
 impl From<PathBuf> for Dowser {
 	fn from(src: PathBuf) -> Self {
-		if let Some((h, is_dir, p)) = resolve_path(src, false) {
+		if let Some((h, is_dir, p)) = resolve_path(src) {
 			let mut seen = HashSet::with_capacity_and_hasher(4096, NoHashState::default());
 			seen.insert(h);
 
@@ -141,7 +142,7 @@ impl From<&[PathBuf]> for Dowser {
 		let mut dirs = Vec::with_capacity(8);
 		let mut files = Vec::with_capacity(8);
 
-		for (h, is_dir, p) in src.iter().filter_map(|p| resolve_path(p.clone(), false)) {
+		for (h, is_dir, p) in src.iter().filter_map(|p| resolve_path(p.clone())) {
 			if seen.insert(h) {
 				if is_dir { dirs.push(p); }
 				else { files.push(p); }
@@ -163,7 +164,7 @@ impl From<Vec<PathBuf>> for Dowser {
 		let mut dirs = Vec::with_capacity(8);
 		let mut files = Vec::with_capacity(8);
 
-		for (h, is_dir, p) in src.into_iter().filter_map(|p| resolve_path(p, false)) {
+		for (h, is_dir, p) in src.into_iter().filter_map(resolve_path) {
 			if seen.insert(h) {
 				if is_dir { dirs.push(p); }
 				else { files.push(p); }
@@ -220,12 +221,10 @@ impl Dowser {
 				let d = Mutex::new(&mut self.dirs);
 
 				rd.par_bridge()
-					.for_each(|e| if let Ok(e) = e {
-						if let Some((h, is_dir, p)) = resolve_path(e.path(), true) {
-							if mutex!(seen).insert(h) {
-								if is_dir { mutex!(d).push(p); }
-								else { mutex!(f).push(p); }
-							}
+					.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
+						if mutex!(seen).insert(h) {
+							if is_dir { mutex!(d).push(p); }
+							else { mutex!(f).push(p); }
 						}
 					});
 			}
@@ -247,12 +246,10 @@ impl Dowser {
 		new.into_par_iter()
 			.filter_map(|p| std::fs::read_dir(p).ok())
 			.flat_map(ParallelBridge::par_bridge)
-			.for_each(|e| if let Ok(e) = e {
-				if let Some((h, is_dir, p)) = resolve_path(e.path(), true) {
-					if mutex!(seen).insert(h) {
-						if is_dir { mutex!(d).push(p); }
-						else { mutex!(f).push(p); }
-					}
+			.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
+				if mutex!(seen).insert(h) {
+					if is_dir { mutex!(d).push(p); }
+					else { mutex!(f).push(p); }
 				}
 			});
 	}
@@ -307,7 +304,7 @@ impl Dowser {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some((h, is_dir, p)) = resolve_path(PathBuf::from(path.as_ref()), false) {
+		if let Some((h, is_dir, p)) = resolve_path(path.as_ref().to_path_buf()) {
 			if self.seen.insert(h) {
 				if is_dir { self.dirs.push(p); }
 				else { self.files.push(p); }
@@ -431,12 +428,10 @@ impl Dowser {
 				new.into_par_iter()
 					.filter_map(|p| std::fs::read_dir(p).ok())
 					.flat_map(ParallelBridge::par_bridge)
-					.for_each(|e| if let Ok(e) = e {
-						if let Some((h, is_dir, p)) = resolve_path(e.path(), true) {
-							if mutex!(s).insert(h) {
-								if is_dir { mutex!(d).push(p); }
-								else if cb(&p) { mutex!(f).push(p); }
-							}
+					.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
+						if mutex!(s).insert(h) {
+							if is_dir { mutex!(d).push(p); }
+							else if cb(&p) { mutex!(f).push(p); }
 						}
 					});
 			}
@@ -462,30 +457,34 @@ fn dowser_threads() -> usize {
 	}
 }
 
+/// # Resolve Entry Result.
+///
+/// This is like `resolve_path`, except it assumes that any non-symlink entry
+/// path is canonical, because its parent path was canonical.
+///
+/// Symlinks get passed to `resolve_path`, ensuring they're fully
+/// canonicalized.
+fn resolve_entry(e: Result<DirEntry, std::io::Error>) -> Option<(u64, bool, PathBuf)> {
+	let e = e.ok()?;
+
+	// If this is a symlink, we have to follow it.
+	if e.file_type().map_or(true, |ft| ft.is_symlink()) {
+		return resolve_path(e.path());
+	}
+
+	let meta = e.metadata().ok()?;
+	let path = e.path();
+	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
+	Some((hash, meta.is_dir(), path))
+}
+
 /// # Resolve Path.
 ///
 /// This attempts to cheaply resolve a given path, returning:
 /// * A unique hash derived from the path's device and inode.
 /// * A bool indicating whether or not the path is a directory.
 /// * The canonicalized path.
-///
-/// As [`std::fs::canonicalize`] is an expensive operation, this method allows
-/// a "trusted" bypass, which will only canonicalize the path if it is a
-/// symlink.
-///
-/// The trusted mode is only appropriate in cases like `ReadDir` where the
-/// directory seed was canonicalized. The idea is that since `DirEntry` paths
-/// are joined to the seed, they'll be canonical so long as the seed was,
-/// except in cases of symlinks.
-fn resolve_path(path: PathBuf, trusted: bool) -> Option<(u64, bool, PathBuf)> {
-	if trusted {
-		let meta = std::fs::symlink_metadata(&path).ok()?;
-		if ! meta.file_type().is_symlink() {
-			let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
-			return Some((hash, meta.is_dir(), path));
-		}
-	}
-
+fn resolve_path(path: PathBuf) -> Option<(u64, bool, PathBuf)> {
 	let path = std::fs::canonicalize(path).ok()?;
 	let meta = std::fs::metadata(&path).ok()?;
 	let hash: u64 = NoHashU64::hash_path(meta.dev(), meta.ino());
@@ -546,6 +545,15 @@ mod tests {
 		let test_dir = std::fs::canonicalize("./tests/links")
 			.expect("Missing dowser link directory.");
 
+		// Make sure symlinks are detected.
+		let links = std::fs::read_dir(&test_dir)
+			.expect("Missing dowser link directory.")
+			.filter_map(Result::ok)
+			.filter_map(|e| e.file_type().ok())
+			.filter(|t| t.is_symlink())
+			.count();
+		assert_eq!(links, 1, "Wrong symlink count!");
+
 		let raw = vec![
 			test_dir.join("01"),
 			test_dir.join("02"),
@@ -557,9 +565,10 @@ mod tests {
 			test_dir.join("06/08"),
 			test_dir.join("06/09"),
 			test_dir.join("06/10"), // Sym to one.
+			test_dir.join("06/11"), // Sym to seven to six.
 		];
 
-		let canon = {
+		let mut canon = {
 			let mut tmp: Vec<PathBuf> = raw.iter()
 				.filter_map(|x| std::fs::canonicalize(x).ok())
 				.collect();
@@ -569,14 +578,15 @@ mod tests {
 		};
 
 		// There should be two fewer entries as two are symlinks.
-		assert_eq!(raw.len(), 10);
+		assert_eq!(raw.len(), 11);
 		assert_eq!(canon.len(), 8, "{:?}", canon);
 		assert!(! canon.contains(&raw[6]));
 		assert!(! canon.contains(&raw[9]));
+		assert!(! canon.contains(&raw[10]));
 
 		let trusting = {
 			let mut tmp: Vec<PathBuf> = raw.iter()
-				.filter_map(|x| resolve_path(x.clone(), true).map(|(_, _, p)| p))
+				.filter_map(|x| resolve_path(x.clone()).map(|(_, _, p)| p))
 				.collect();
 			tmp.sort();
 			tmp.dedup();
@@ -584,5 +594,17 @@ mod tests {
 		};
 
 		assert_eq!(trusting, canon);
+
+		// Now let's make sure Dowser does the same thing, albeit just the
+		// files.
+		canon.retain(|p| p.is_file());
+
+		let mut itered: Vec<PathBuf> = Dowser::from(test_dir.as_path()).collect();
+		itered.sort();
+		assert_eq!(canon, itered);
+
+		itered = Dowser::from(test_dir.as_path()).into_vec(|_| true);
+		itered.sort();
+		assert_eq!(canon, itered);
 	}
 }
