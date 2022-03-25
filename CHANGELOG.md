@@ -2,6 +2,14 @@
 
 
 
+## [0.4.3](https://github.com/Blobfolio/dowser/releases/tag/v0.4.3) - TBD
+
+### Added
+
+* impl `Clone` for `Dowser`.
+
+
+
 ## [0.4.2](https://github.com/Blobfolio/dowser/releases/tag/v0.4.2) - 2022-03-08
 
 ### Changed

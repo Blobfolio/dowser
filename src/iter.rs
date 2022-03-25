@@ -39,7 +39,7 @@ macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::Poiso
 
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// # Dowser.
 ///
 /// `Dowser` is a very simple recursive file iterator with parallelized
