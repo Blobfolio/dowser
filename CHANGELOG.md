@@ -8,6 +8,7 @@
 
 * impl `Clone` for `Dowser`
 * `Dowser::into_vec`
+* `Dowser::with_dir_concurrency`
 
 
 

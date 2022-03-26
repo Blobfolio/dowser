@@ -16,6 +16,7 @@ use std::{
 	collections::HashSet,
 	fs::DirEntry,
 	hash::Hasher,
+	num::NonZeroUsize,
 	os::unix::fs::MetadataExt,
 	path::{
 		Path,
@@ -43,6 +44,68 @@ macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::Poiso
 /// This tuple represents the hash, whether or not it is a directory, and the
 /// canonical path.
 type Resolved = (u64, bool, PathBuf);
+
+
+
+#[derive(Debug, Clone, Copy)]
+/// # Directory Concurrency.
+///
+/// This enum determines if and how many directories [`Dowser`] should try to
+/// read in parallel, which is configured via [`Dowser::with_dir_concurrency`].
+///
+/// The default is [`DirConcurrency::Sane`], which caps the maximum number of
+/// concurrent directory reads to `(CPU/Threads - 1).min(8)`. This is a good
+/// middle ground between [`DirConcurrency::Single`] and [`DirConcurrency::Max`].
+///
+/// If you anticipate there being very few directories, [`DirConcurrency::Single`]
+/// could actually be faster.
+///
+/// Conversely, if you expect _a lot_ of directories, [`DirConcurrency::Max`] is
+/// likely the best strategy. However **be careful** with this choice. If the user's
+/// `ulimit` is set too low, paths might be intermittently skipped due to
+/// unreadability.
+pub enum DirConcurrency {
+	/// # One at a Time.
+	Single,
+
+	/// # A Probably Okay Default.
+	Sane,
+
+	/// # READ EVERYTHING ALWAYS.
+	Max,
+
+	/// # A Custom Value.
+	Other(NonZeroUsize),
+}
+
+impl Default for DirConcurrency {
+	fn default() -> Self { Self::Sane }
+}
+
+impl From<usize> for DirConcurrency {
+	fn from(src: usize) -> Self {
+		match src {
+			0 => Self::Max,
+			1 => Self::Single,
+			// Safety: zero is checked above.
+			n => Self::Other(unsafe { NonZeroUsize::new_unchecked(n) }),
+		}
+	}
+}
+
+impl From<DirConcurrency> for usize {
+	fn from(src: DirConcurrency) -> Self {
+		match src {
+			DirConcurrency::Single => 1,
+			DirConcurrency::Sane => match rayon::current_num_threads() {
+				0..=2 => 1,
+				n => Self::min(n - 1, 8),
+			},
+			DirConcurrency::Max => 0,
+			DirConcurrency::Other(n) => n.get(),
+		}
+	}
+}
 
 
 
@@ -96,7 +159,7 @@ type Resolved = (u64, bool, PathBuf);
 pub struct Dowser {
 	files: Vec<PathBuf>,
 	dirs: Vec<PathBuf>,
-	threads: usize,
+	dir_concurrency: usize,
 	seen: HashSet<u64, NoHashState>,
 }
 
@@ -105,7 +168,7 @@ impl Default for Dowser {
 		Self {
 			files: Vec::with_capacity(8),
 			dirs: Vec::with_capacity(8),
-			threads: dowser_threads(),
+			dir_concurrency: usize::from(DirConcurrency::Sane),
 			seen: HashSet::with_capacity_and_hasher(4096, NoHashState::default()),
 		}
 	}
@@ -126,7 +189,7 @@ impl From<PathBuf> for Dowser {
 			Self {
 				files,
 				dirs,
-				threads: dowser_threads(),
+				dir_concurrency: usize::from(DirConcurrency::Sane),
 				seen,
 			}
 		}
@@ -158,7 +221,7 @@ impl From<&[PathBuf]> for Dowser {
 		Self {
 			files,
 			dirs,
-			threads: dowser_threads(),
+			dir_concurrency: usize::from(DirConcurrency::Sane),
 			seen,
 		}
 	}
@@ -180,7 +243,7 @@ impl From<Vec<PathBuf>> for Dowser {
 		Self {
 			files,
 			dirs,
-			threads: dowser_threads(),
+			dir_concurrency: usize::from(DirConcurrency::Sane),
 			seen,
 		}
 	}
@@ -195,12 +258,28 @@ impl Iterator for Dowser {
 			if let Some(p) = self.files.pop() {
 				return Some(p);
 			}
+
 			// Read some directories.
-			match self.dirs.len().min(self.threads) {
-				0 => break,
-				1 => { self.crawl(); },
-				n => { self.crawl_n(n); },
-			}
+			if self.dirs.is_empty() { break; }
+
+			let idx =
+				if self.dir_concurrency == 0 { 0 }
+				else { self.dirs.len().saturating_sub(self.dir_concurrency) };
+
+			let new = self.dirs.split_off(idx);
+			let seen = Mutex::new(&mut self.seen);
+			let f = Mutex::new(&mut self.files);
+			let d = Mutex::new(&mut self.dirs);
+
+			new.into_par_iter()
+				.filter_map(|p| std::fs::read_dir(p).ok())
+				.flat_map(ParallelBridge::par_bridge)
+				.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
+					if mutex!(seen).insert(h) {
+						if is_dir { mutex!(d).push(p); }
+						else { mutex!(f).push(p); }
+					}
+				});
 		}
 
 		None
@@ -212,52 +291,6 @@ impl Iterator for Dowser {
 
 		if 0 == dirs { (files, Some(files)) }
 		else { (files + dirs, None) }
-	}
-}
-
-impl Dowser {
-	/// # Crunch One.
-	///
-	/// This reads the final directory in the queue when there is only one.
-	fn crawl(&mut self) {
-		if let Some(p) = self.dirs.pop() {
-			if let Ok(rd) = std::fs::read_dir(p) {
-				let seen = Mutex::new(&mut self.seen);
-				let f = Mutex::new(&mut self.files);
-				let d = Mutex::new(&mut self.dirs);
-
-				rd.par_bridge()
-					.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
-						if mutex!(seen).insert(h) {
-							if is_dir { mutex!(d).push(p); }
-							else { mutex!(f).push(p); }
-						}
-					});
-			}
-		}
-	}
-
-	/// # Crunch Many.
-	///
-	/// This reads multiple directories — but maybe not _all_ — in the queue,
-	/// using multiple threads to spread the effort out a bit.
-	fn crawl_n(&mut self, n: usize) {
-		// Split off so we can write right back to self.dirs during iteration.
-		let new = self.dirs.split_off(self.dirs.len() - n);
-
-		let seen = Mutex::new(&mut self.seen);
-		let f = Mutex::new(&mut self.files);
-		let d = Mutex::new(&mut self.dirs);
-
-		new.into_par_iter()
-			.filter_map(|p| std::fs::read_dir(p).ok())
-			.flat_map(ParallelBridge::par_bridge)
-			.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
-				if mutex!(seen).insert(h) {
-					if is_dir { mutex!(d).push(p); }
-					else { mutex!(f).push(p); }
-				}
-			});
 	}
 }
 
@@ -317,6 +350,19 @@ impl Dowser {
 			}
 		}
 
+		self
+	}
+
+	#[must_use]
+	/// # With Directory Concurrency.
+	///
+	/// By default, [`Dowser`] processes directories in parallel, but only so
+	/// many at a time. This tends to provide a small performance boost for
+	/// most searches, but may not always be the best strategy.
+	///
+	/// See [`DirConcurrency`] for more information.
+	pub fn with_dir_concurrency(mut self, val: DirConcurrency) -> Self {
+		self.dir_concurrency = usize::from(val);
 		self
 	}
 }
@@ -415,7 +461,7 @@ impl Dowser {
 	/// ```
 	pub fn into_vec<F>(self, cb: F) -> Vec<PathBuf>
 	where F: Fn(&Path) -> bool + Sync + Send {
-		let Self { mut files, mut dirs, threads, mut seen } = self;
+		let Self { mut files, mut dirs, dir_concurrency, mut seen } = self;
 
 		// We wouldn't have had a chance to filter these yet.
 		if ! files.is_empty() {
@@ -428,7 +474,11 @@ impl Dowser {
 			let f = Mutex::new(&mut files);
 
 			while ! dirs.is_empty() {
-				let new = dirs.split_off(dirs.len().saturating_sub(threads));
+				let idx =
+					if dir_concurrency == 0 { 0 }
+					else { dirs.len().saturating_sub(dir_concurrency) };
+
+				let new = dirs.split_off(idx);
 				let d = Mutex::new(&mut dirs);
 
 				new.into_par_iter()
@@ -449,19 +499,6 @@ impl Dowser {
 }
 
 
-
-#[inline]
-/// # Thread Count.
-///
-/// This returns the ideal number of threads to use when crawling directories.
-/// To help with `ulimit` difficulties, this is either one less than what Rayon
-/// would normally use, or 8, whichever is lower.
-fn dowser_threads() -> usize {
-	match rayon::current_num_threads() {
-		0..=2 => 1,
-		n => usize::min(n - 1, 8),
-	}
-}
 
 /// # Hash Path.
 fn hash_path(dev: u64, ino: u64) -> u64 {
