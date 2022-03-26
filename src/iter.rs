@@ -494,18 +494,11 @@ impl Entry {
 		}
 
 		let meta = e.metadata().ok()?;
-		let path = e.path();
-
-		#[cfg(any(target_os = "redox", unix))]
-		let hash = Self::hash_meta(&meta);
-
-		#[cfg(not(any(target_os = "redox", unix)))]
-		let hash = Self::hash_path(&path);
 
 		Some(Self {
-			path,
+			path: e.path(),
 			is_dir: meta.is_dir(),
-			hash,
+			hash: Self::hash_meta(&meta),
 		})
 	}
 
@@ -519,20 +512,13 @@ impl Entry {
 		let path = std::fs::canonicalize(path).ok()?;
 		let meta = std::fs::metadata(&path).ok()?;
 
-		#[cfg(any(target_os = "redox", unix))]
-		let hash = Self::hash_meta(&meta);
-
-		#[cfg(not(any(target_os = "redox", unix)))]
-		let hash = Self::hash_path(&path);
-
 		Some(Self {
 			path,
 			is_dir: meta.is_dir(),
-			hash,
+			hash: Self::hash_meta(&meta),
 		})
 	}
 
-	#[cfg(any(target_os = "redox", unix))]
 	#[must_use]
 	/// # Hash Meta.
 	///
@@ -547,7 +533,6 @@ impl Entry {
 		hasher.finish()
 	}
 
-	#[cfg(any(target_os = "redox", unix))]
 	#[must_use]
 	/// # Hash Path.
 	///
@@ -567,22 +552,6 @@ impl Entry {
 			.and_then(std::fs::metadata)
 			.ok()
 			.map(|m| Self::hash_meta(&m))
-	}
-
-	#[cfg(not(any(target_os = "redox", unix)))]
-	#[must_use]
-	/// # Hash Path.
-	///
-	/// This calculates a hash from the path itself. Not very efficient, but
-	/// should help with cross-platform compatibility.
-	fn hash_path<P>(path: P) -> Option<u64>
-	where P: AsRef<Path> {
-		use std::hash::Hash;
-
-		let path = std::fs::canonicalize(path).ok()?;
-		let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
-		path.hash(&mut hasher);
-		Some(hasher.finish())
 	}
 }
 
