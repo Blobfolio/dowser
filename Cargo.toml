@@ -1,6 +1,6 @@
 [package]
 name = "dowser"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.56"
@@ -39,7 +39,7 @@ version = "0.12.*"
 optional = true
 
 [dev-dependencies]
-brunch = "0.2.*"
+brunch = "0.2.*, >=0.2.4"
 
 [[bench]]
 name = "dowser"

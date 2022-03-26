@@ -3,35 +3,22 @@
 */
 
 use std::hash::{
-	BuildHasher,
+	BuildHasherDefault,
 	Hasher,
 };
 
 
 
-#[derive(Debug, Copy, Clone, Default)]
-/// # Passthrough Hash State.
+/// # No-Hash Hash State.
+pub(super) type NoHashState = BuildHasherDefault<NoHashU64>;
+
+
+
+#[derive(Copy, Clone, Default)]
+/// # No-Hash Hash.
 ///
-/// This is just a fancy alias for [`NoHashU64::default`].
-pub(super) struct NoHashState;
-
-impl BuildHasher for NoHashState {
-	type Hasher = NoHashU64;
-
-	#[inline]
-	fn build_hasher(&self) -> Self::Hasher { NoHashU64::default() }
-}
-
-
-
-#[derive(Debug, Default, Copy, Clone)]
-/// # Passthrough Hash.
-///
-/// This is a non-hashing hash for `u64` sets that uses `self` as the hash.
-/// It is used by [`Dowser`] to track visited paths, which are stored as
-/// pre-calculated `u64` hashes. (The set needs neither the inputs nor the
-/// paths; it just needs to know whether or not a new path has already been
-/// seen.)
+/// This is a non-hashing hasher for `u64` values, i.e. the value is also the
+/// hash.
 pub(super) struct NoHashU64(u64);
 
 impl Hasher for NoHashU64 {
@@ -58,19 +45,4 @@ impl Hasher for NoHashU64 {
 	#[inline]
 	/// # Finish.
 	fn finish(&self) -> u64 { self.0 }
-}
-
-impl NoHashU64 {
-	#[must_use]
-	#[inline]
-	/// # Path Hash.
-	///
-	/// This hashes a device and inode to produce a more or less unique result.
-	/// This is the value we grab for each path and use in the `HashSet`.
-	pub(crate) fn hash_path(dev: u64, ino: u64) -> u64 {
-		let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
-		hasher.write_u64(dev);
-		hasher.write_u64(ino);
-		hasher.finish()
-	}
 }
