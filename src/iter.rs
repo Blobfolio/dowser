@@ -263,12 +263,17 @@ impl Iterator for Dowser {
 		None
 	}
 
+	/// # Size Hints.
+	///
+	/// This iterator has an unknown size until the final directory has been
+	/// read.
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		let dirs = self.dirs.len();
-		let files = self.files.len();
+		let lower = self.files.len();
+		let upper =
+			if self.dirs.is_empty() { Some(lower) }
+			else { None };
 
-		if 0 == dirs { (files, Some(files)) }
-		else { (files + dirs, None) }
+		(lower, upper)
 	}
 }
 
