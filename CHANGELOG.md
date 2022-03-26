@@ -2,7 +2,7 @@
 
 
 
-## [0.4.3](https://github.com/Blobfolio/dowser/releases/tag/v0.4.3) - TBD
+## [0.4.3](https://github.com/Blobfolio/dowser/releases/tag/v0.4.3) - 2022-03-26
 
 ### Added
 
