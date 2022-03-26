@@ -3,35 +3,22 @@
 */
 
 use std::hash::{
-	BuildHasher,
+	BuildHasherDefault,
 	Hasher,
 };
 
 
 
-#[derive(Debug, Copy, Clone, Default)]
-/// # Passthrough Hash State.
+/// # No-Hash Hash State.
+pub(super) type NoHashState = BuildHasherDefault<NoHashU64>;
+
+
+
+#[derive(Copy, Clone, Default)]
+/// # No-Hash Hash.
 ///
-/// This is just a fancy alias for [`NoHashU64::default`].
-pub(super) struct NoHashState;
-
-impl BuildHasher for NoHashState {
-	type Hasher = NoHashU64;
-
-	#[inline]
-	fn build_hasher(&self) -> Self::Hasher { NoHashU64::default() }
-}
-
-
-
-#[derive(Debug, Copy, Clone, Default)]
-/// # Passthrough Hash.
-///
-/// This is a non-hashing hash for `u64` sets that uses `self` as the hash.
-/// It is used by [`Dowser`] to track visited paths, which are stored as
-/// pre-calculated `u64` hashes. (The set needs neither the inputs nor the
-/// paths; it just needs to know whether or not a new path has already been
-/// seen.)
+/// This is a non-hashing hasher for `u64` values, i.e. the value is also the
+/// hash.
 pub(super) struct NoHashU64(u64);
 
 impl Hasher for NoHashU64 {
