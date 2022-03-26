@@ -24,7 +24,7 @@ impl BuildHasher for NoHashState {
 
 
 
-#[derive(Debug, Default, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 /// # Passthrough Hash.
 ///
 /// This is a non-hashing hash for `u64` sets that uses `self` as the hash.

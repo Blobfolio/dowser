@@ -237,9 +237,10 @@ impl Iterator for Dowser {
 				return Some(p);
 			}
 
-			// Read some directories.
+			// Are we out of things to do?
 			if self.dirs.is_empty() { break; }
 
+			// Read some directories!
 			let idx =
 				if self.dir_concurrency == 0 { 0 }
 				else { self.dirs.len().saturating_sub(self.dir_concurrency) };
@@ -529,10 +530,10 @@ fn resolve_path(path: PathBuf) -> Option<Resolved> {
 ///
 /// This is identical to `resolve_path`, except it only returns the hash. It
 /// is used by [`Dowser::without_paths`] and [`Dowser::without_path`], which
-/// don't actually need anything more.
+/// don't need the rest.
 fn resolve_path_hash(path: &Path) -> Option<u64> {
 	if let Ok(meta) = std::fs::symlink_metadata(&path) {
-		if ! meta.file_type().is_symlink() {
+		if ! meta.is_symlink() {
 			return Some(hash_path(meta.dev(), meta.ino()));
 		}
 	}
