@@ -176,24 +176,16 @@ impl Default for Dowser {
 
 impl From<PathBuf> for Dowser {
 	fn from(src: PathBuf) -> Self {
+		let mut out = Self::default();
+
 		if let Some((h, is_dir, p)) = resolve_path(src) {
-			let mut seen = HashSet::with_capacity_and_hasher(4096, NoHashState::default());
-			seen.insert(h);
-
-			let mut dirs = Vec::with_capacity(8);
-			let mut files = Vec::with_capacity(8);
-
-			if is_dir { dirs.push(p); }
-			else { files.push(p); }
-
-			Self {
-				files,
-				dirs,
-				dir_concurrency: usize::from(DirConcurrency::Sane),
-				seen,
+			if out.seen.insert(h) {
+				if is_dir { out.dirs.push(p); }
+				else { out.files.push(p); }
 			}
 		}
-		else { Self::default() }
+
+		out
 	}
 }
 
@@ -207,45 +199,31 @@ impl From<&PathBuf> for Dowser {
 
 impl From<&[PathBuf]> for Dowser {
 	fn from(src: &[PathBuf]) -> Self {
-		let mut seen = HashSet::with_capacity_and_hasher(4096, NoHashState::default());
-		let mut dirs = Vec::with_capacity(8);
-		let mut files = Vec::with_capacity(8);
+		let mut out = Self::default();
 
 		for (h, is_dir, p) in src.iter().filter_map(|p| resolve_path(p.clone())) {
-			if seen.insert(h) {
-				if is_dir { dirs.push(p); }
-				else { files.push(p); }
+			if out.seen.insert(h) {
+				if is_dir { out.dirs.push(p); }
+				else { out.files.push(p); }
 			}
 		}
 
-		Self {
-			files,
-			dirs,
-			dir_concurrency: usize::from(DirConcurrency::Sane),
-			seen,
-		}
+		out
 	}
 }
 
 impl From<Vec<PathBuf>> for Dowser {
 	fn from(src: Vec<PathBuf>) -> Self {
-		let mut seen = HashSet::with_capacity_and_hasher(4096, NoHashState::default());
-		let mut dirs = Vec::with_capacity(8);
-		let mut files = Vec::with_capacity(8);
+		let mut out = Self::default();
 
 		for (h, is_dir, p) in src.into_iter().filter_map(resolve_path) {
-			if seen.insert(h) {
-				if is_dir { dirs.push(p); }
-				else { files.push(p); }
+			if out.seen.insert(h) {
+				if is_dir { out.dirs.push(p); }
+				else { out.files.push(p); }
 			}
 		}
 
-		Self {
-			files,
-			dirs,
-			dir_concurrency: usize::from(DirConcurrency::Sane),
-			seen,
-		}
+		out
 	}
 }
 
