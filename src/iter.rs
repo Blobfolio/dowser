@@ -14,6 +14,7 @@ use rayon::iter::{
 };
 use std::{
 	collections::HashSet,
+	ffi::OsStr,
 	fs::{
 		DirEntry,
 		Metadata,
@@ -168,17 +169,16 @@ impl Default for Dowser {
 	}
 }
 
-impl From<PathBuf> for Dowser {
-	fn from(src: PathBuf) -> Self { Self::default().with_path(src) }
+macro_rules! from_single {
+	($($ty:ty),+ $(,)?) => ($(
+		impl From<$ty> for Dowser {
+			#[inline]
+			fn from(src: $ty) -> Self { Self::default().with_path(src) }
+		}
+	)+);
 }
 
-impl From<&Path> for Dowser {
-	fn from(src: &Path) -> Self { Self::default().with_path(src) }
-}
-
-impl From<&PathBuf> for Dowser {
-	fn from(src: &PathBuf) -> Self { Self::default().with_path(src) }
-}
+from_single!(&OsStr, &Path, PathBuf, &PathBuf, &str, String, &String);
 
 impl From<&[PathBuf]> for Dowser {
 	fn from(src: &[PathBuf]) -> Self {
@@ -473,6 +473,9 @@ impl Dowser {
 
 
 /// # File Entry.
+///
+/// This holds a pre-computed hash, whether or not the path points to a
+/// directory, and the canonicalized path itself.
 struct Entry {
 	path: PathBuf,
 	is_dir: bool,
@@ -581,7 +584,7 @@ mod tests {
 		assert!(! w1.contains(&abs_perr));
 
 		// From init.
-		let mut w2: Vec<PathBuf> = Dowser::from(PathBuf::from("tests/")).collect();
+		let mut w2: Vec<PathBuf> = Dowser::from("tests/").collect();
 		w1.sort();
 		w2.sort();
 		assert_eq!(w1, w2);

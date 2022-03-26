@@ -2,6 +2,18 @@
 
 
 
+## [0.4.4](https://github.com/Blobfolio/dowser/releases/tag/v0.4.4) - TBD
+
+### Added
+
+* impl `From<&OsStr>`
+* impl `From<&str>`
+* impl `From<&String>`
+* impl `From<String>`
+
+
+
+
 ## [0.4.3](https://github.com/Blobfolio/dowser/releases/tag/v0.4.3) - 2022-03-26
 
 ### Added
