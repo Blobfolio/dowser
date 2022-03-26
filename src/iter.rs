@@ -237,28 +237,39 @@ impl Iterator for Dowser {
 				return Some(p);
 			}
 
-			// Are we out of things to do?
-			if self.dirs.is_empty() { break; }
-
-			// Read some directories!
-			let idx =
-				if self.dir_concurrency == 0 { 0 }
-				else { self.dirs.len().saturating_sub(self.dir_concurrency) };
-
-			let new = self.dirs.split_off(idx);
-			let seen = Mutex::new(&mut self.seen);
-			let f = Mutex::new(&mut self.files);
-			let d = Mutex::new(&mut self.dirs);
-
-			new.into_par_iter()
-				.filter_map(|p| std::fs::read_dir(p).ok())
-				.flat_map(ParallelBridge::par_bridge)
-				.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
-					if mutex!(seen).insert(h) {
-						if is_dir { mutex!(d).push(p); }
-						else { mutex!(f).push(p); }
+			// Read some directories maybe!
+			let len = self.dirs.len();
+			if len == 0 { break; }
+			if self.dir_concurrency == 1 || len == 1 {
+				if let Ok(rd) = std::fs::read_dir(self.dirs.remove(len - 1)) {
+					for (h, is_dir, p) in rd.filter_map(resolve_entry) {
+						if self.seen.insert(h) {
+							if is_dir { self.dirs.push(p); }
+							else { self.files.push(p); }
+						}
 					}
-				});
+				}
+			}
+			else {
+				let idx =
+					if self.dir_concurrency == 0 { 0 }
+					else { len.saturating_sub(self.dir_concurrency) };
+
+				let new = self.dirs.split_off(idx);
+				let seen = Mutex::new(&mut self.seen);
+				let f = Mutex::new(&mut self.files);
+				let d = Mutex::new(&mut self.dirs);
+
+				new.into_par_iter()
+					.filter_map(|p| std::fs::read_dir(p).ok())
+					.flat_map(ParallelBridge::par_bridge)
+					.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
+						if mutex!(seen).insert(h) {
+							if is_dir { mutex!(d).push(p); }
+							else { mutex!(f).push(p); }
+						}
+					});
+			}
 		}
 
 		None
