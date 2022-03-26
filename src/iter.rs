@@ -468,10 +468,12 @@ impl Dowser {
 			let s = Mutex::new(&mut seen);
 			let f = Mutex::new(&mut files);
 
-			while ! dirs.is_empty() {
+			loop {
+				let len = dirs.len();
+				if len == 0 { break; }
 				let idx =
 					if dir_concurrency == 0 { 0 }
-					else { dirs.len().saturating_sub(dir_concurrency) };
+					else { len.saturating_sub(dir_concurrency) };
 
 				let new = dirs.split_off(idx);
 				let d = Mutex::new(&mut dirs);
