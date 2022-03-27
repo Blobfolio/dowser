@@ -70,11 +70,7 @@ pub enum DirConcurrency {
 	Max,
 
 	/// # A Custom Value.
-	///
-	/// Note that zero is equivalent to using [`DirConcurrency::Max`]. To
-	/// read only one directory at a time, use [`DirConcurrency::Single`] or
-	/// set a value of one.
-	Custom(usize),
+	Custom(NonZeroUsize),
 
 	#[deprecated(since = "0.4.4", note = "use DirConcurrency::Custom instead")]
 	/// # A Custom Value.
@@ -90,13 +86,13 @@ impl From<usize> for DirConcurrency {
 		match src {
 			0 => Self::Max,
 			1 => Self::Single,
-			n => Self::Custom(n),
+			n => Self::Custom(unsafe { NonZeroUsize::new_unchecked(n) }),
 		}
 	}
 }
 
 impl From<DirConcurrency> for usize {
-	#[allow(deprecated)] // It still exists. Haha.
+	#[allow(deprecated)] // We deprecated it!
 	fn from(src: DirConcurrency) -> Self {
 		match src {
 			DirConcurrency::Sane => match rayon::current_num_threads() {
@@ -104,9 +100,8 @@ impl From<DirConcurrency> for usize {
 				n => Self::min(n - 1, 8),
 			},
 			DirConcurrency::Single => 1,
-			DirConcurrency::Max => 0,
-			DirConcurrency::Custom(n) => n,
-			DirConcurrency::Other(n) => n.get(),
+			DirConcurrency::Max => Self::MAX,
+			DirConcurrency::Custom(n) | DirConcurrency::Other(n) => n.get(),
 		}
 	}
 }

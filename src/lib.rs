@@ -87,7 +87,6 @@ let files: Vec::<PathBuf> = Dowser::default()
 ```
 */
 
-#![forbid(unsafe_code)]
 #![warn(
 	clippy::filetype_is_file,
 	clippy::integer_division,
