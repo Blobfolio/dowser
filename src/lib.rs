@@ -116,13 +116,12 @@ let files: Vec::<PathBuf> = Dowser::default()
 mod ext;
 mod hash;
 mod iter;
+mod par;
 pub mod utility;
 
 
 
 pub use ext::Extension;
 pub(crate) use hash::NoHashState;
-pub use iter::{
-	DirConcurrency,
-	Dowser,
-};
+pub use iter::Dowser;
+pub use par::DirConcurrency;
