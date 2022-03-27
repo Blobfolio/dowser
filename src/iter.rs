@@ -95,6 +95,11 @@ impl From<usize> for DirConcurrency {
 	}
 }
 
+impl From<NonZeroUsize> for DirConcurrency {
+	#[inline]
+	fn from(src: NonZeroUsize) -> Self { Self::Custom(src) }
+}
+
 impl From<DirConcurrency> for usize {
 	#[allow(deprecated)] // We deprecated it!
 	fn from(src: DirConcurrency) -> Self {
@@ -221,6 +226,14 @@ impl From<Vec<PathBuf>> for Dowser {
 impl Iterator for Dowser {
 	type Item = PathBuf;
 
+	/// # Next!
+	///
+	/// This iterator yields canonical, deduplicated _file_ paths. Directories
+	/// are recursively traversed, but their paths are not returned.
+	///
+	/// Item ordering is arbitrary and likely to change from run-to-run, but
+	/// unless you hit a `ulimit`-type ceiling (see [`DirConcurrency`]), the
+	/// same items should always get returned.
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
 			// We have a file ready to go!
@@ -228,9 +241,11 @@ impl Iterator for Dowser {
 				return Some(p);
 			}
 
-			// Read some directories maybe!
+			// Are we out of things to do?
 			let len = self.dirs.len();
 			if len == 0 { break; }
+
+			// Read one directory in serial.
 			if self.dir_concurrency == 1 {
 				if let Ok(rd) = std::fs::read_dir(self.dirs.remove(len - 1)) {
 					for e in rd.filter_map(Entry::from_entry) {
@@ -241,6 +256,7 @@ impl Iterator for Dowser {
 					}
 				}
 			}
+			// Read one or more directories in parallel.
 			else {
 				let new = self.dirs.split_off(len.saturating_sub(self.dir_concurrency));
 				let s = Mutex::new(&mut self.seen);
@@ -265,7 +281,8 @@ impl Iterator for Dowser {
 	/// # Size Hints.
 	///
 	/// This iterator has an unknown size until the final directory has been
-	/// read.
+	/// read, after which point it is just a matter of flushing the files it
+	/// found there.
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		let lower = self.files.len();
 		let upper =
@@ -443,7 +460,7 @@ impl Dowser {
 			files.retain(|p| cb(p));
 		}
 
-		// Serial?
+		// Consume the queue serially.
 		if dir_concurrency == 1 {
 			while let Some(p) = dirs.pop() {
 				if let Ok(rd) = std::fs::read_dir(p) {
@@ -456,7 +473,7 @@ impl Dowser {
 				}
 			}
 		}
-		// Parallel!
+		// Consume the queue in parallel.
 		else {
 			let s = Mutex::new(&mut seen);
 			let f = Mutex::new(&mut files);
