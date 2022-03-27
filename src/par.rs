@@ -54,6 +54,7 @@ impl From<usize> for DirConcurrency {
 		match src {
 			0 => Self::Max,
 			1 => Self::Single,
+			// Safety: zero is checked above.
 			n => Self::Custom(unsafe { NonZeroUsize::new_unchecked(n) }),
 		}
 	}
