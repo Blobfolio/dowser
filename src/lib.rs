@@ -121,11 +121,9 @@ pub mod utility;
 
 
 
+pub use ext::Extension;
+pub(crate) use hash::NoHashState;
 pub use iter::{
 	DirConcurrency,
 	Dowser,
 };
-pub use ext::Extension;
-
-#[doc(hidden)]
-pub(crate) use hash::NoHashState;
