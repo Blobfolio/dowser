@@ -123,7 +123,8 @@ pub mod utility;
 
 
 pub use ext::Extension;
-pub(crate) use entry::Entry;
-pub(crate) use hash::NoHashState;
 pub use iter::Dowser;
 pub use par::DirConcurrency;
+
+pub(crate) use entry::Entry;
+pub(crate) use hash::NoHashState;
