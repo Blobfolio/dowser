@@ -11,6 +11,10 @@
 * impl `From<&String>`
 * impl `From<String>`
 
+### Deprecated
+
+* `DirConcurrency::Other` (prefer `DirConcurrency::Custom`)
+
 
 
 
