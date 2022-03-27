@@ -49,24 +49,28 @@ macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::Poiso
 /// read in parallel, which is configured via [`Dowser::with_dir_concurrency`].
 ///
 /// The default is [`DirConcurrency::Sane`], which caps the maximum number of
-/// concurrent directory reads to `(CPU/Threads - 1).min(8)`. This is a good
-/// middle ground between [`DirConcurrency::Single`] and [`DirConcurrency::Max`].
+/// concurrent directory reads to `rayon threads - 1` or `8`, whichever's
+/// smaller. This is a good middle ground between [`DirConcurrency::Single`] and
+/// [`DirConcurrency::Max`].
 ///
-/// If you anticipate there being very few directories, [`DirConcurrency::Single`]
-/// could actually be faster.
+/// If you anticipate there being very few paths of any kind, the serial
+/// [`DirConcurrency::Single`] option might actually prove faster.
 ///
 /// Conversely, if you expect _a lot_ of directories, [`DirConcurrency::Max`] is
-/// likely the best strategy. However **be careful** with this choice. If the user's
-/// `ulimit` is set too low, paths might be intermittently skipped due to
+/// likely the best strategy. **However be careful** with this choice. If the user's
+/// `ulimit` is set too low, paths might be silently skipped due to intermittent
 /// unreadability.
 pub enum DirConcurrency {
 	/// # One at a Time.
+	///
+	/// When using this option, the paths within a given directory will also be
+	/// processed in serial.
 	Single,
 
 	/// # A Probably Okay Default.
 	Sane,
 
-	/// # READ EVERYTHING ALWAYS.
+	/// # CONSUME ALL DIRS EN MASSE.
 	Max,
 
 	/// # A Custom Value.
@@ -227,7 +231,7 @@ impl Iterator for Dowser {
 			// Read some directories maybe!
 			let len = self.dirs.len();
 			if len == 0 { break; }
-			if self.dir_concurrency == 1 || len == 1 {
+			if self.dir_concurrency == 1 {
 				if let Ok(rd) = std::fs::read_dir(self.dirs.remove(len - 1)) {
 					for e in rd.filter_map(Entry::from_entry) {
 						if self.seen.insert(e.hash) {
@@ -238,12 +242,8 @@ impl Iterator for Dowser {
 				}
 			}
 			else {
-				let idx =
-					if self.dir_concurrency == 0 { 0 }
-					else { len.saturating_sub(self.dir_concurrency) };
-
-				let new = self.dirs.split_off(idx);
-				let seen = Mutex::new(&mut self.seen);
+				let new = self.dirs.split_off(len.saturating_sub(self.dir_concurrency));
+				let s = Mutex::new(&mut self.seen);
 				let f = Mutex::new(&mut self.files);
 				let d = Mutex::new(&mut self.dirs);
 
@@ -251,7 +251,7 @@ impl Iterator for Dowser {
 					.filter_map(|p| std::fs::read_dir(p).ok())
 					.flat_map(ParallelBridge::par_bridge)
 					.for_each(|e| if let Some(e) = Entry::from_entry(e) {
-						if mutex!(seen).insert(e.hash) {
+						if mutex!(s).insert(e.hash) {
 							if e.is_dir { mutex!(d).push(e.path); }
 							else { mutex!(f).push(e.path); }
 						}
@@ -412,7 +412,8 @@ impl Dowser {
 	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
 	///
 	/// It yields the same results as the above, but makes fewer allocations
-	/// along the way and applies your filter callback in parallel.
+	/// along the way and applies your filter callback in parallel (unless
+	/// [`DirConcurrency::Single`] was set).
 	///
 	/// ## Examples
 	///
@@ -442,19 +443,29 @@ impl Dowser {
 			files.retain(|p| cb(p));
 		}
 
-		// Consume!
-		{
+		// Serial?
+		if dir_concurrency == 1 {
+			while let Some(p) = dirs.pop() {
+				if let Ok(rd) = std::fs::read_dir(p) {
+					for e in rd.filter_map(Entry::from_entry) {
+						if seen.insert(e.hash) {
+							if e.is_dir { dirs.push(e.path); }
+							else if cb(&e.path) { files.push(e.path); }
+						}
+					}
+				}
+			}
+		}
+		// Parallel!
+		else {
 			let s = Mutex::new(&mut seen);
 			let f = Mutex::new(&mut files);
 
 			loop {
 				let len = dirs.len();
 				if len == 0 { break; }
-				let idx =
-					if dir_concurrency == 0 { 0 }
-					else { len.saturating_sub(dir_concurrency) };
 
-				let new = dirs.split_off(idx);
+				let new = dirs.split_off(len.saturating_sub(dir_concurrency));
 				let d = Mutex::new(&mut dirs);
 
 				new.into_par_iter()
