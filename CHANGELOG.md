@@ -15,6 +15,10 @@
 
 * `DirConcurrency::Other` (prefer `DirConcurrency::Custom`)
 
+### Changed
+
+* `DirConcurrency::Single` now does all processing in serial
+
 
 
 
