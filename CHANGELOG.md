@@ -2,6 +2,26 @@
 
 
 
+## [0.4.4](https://github.com/Blobfolio/dowser/releases/tag/v0.4.4) - 2022-03-27
+
+### Added
+
+* impl `From<&OsStr>`
+* impl `From<&str>`
+* impl `From<&String>`
+* impl `From<String>`
+
+### Deprecated
+
+* `DirConcurrency::Other` (prefer `DirConcurrency::Custom`)
+
+### Changed
+
+* `DirConcurrency::Single` now does all processing in serial
+
+
+
+
 ## [0.4.3](https://github.com/Blobfolio/dowser/releases/tag/v0.4.3) - 2022-03-26
 
 ### Added

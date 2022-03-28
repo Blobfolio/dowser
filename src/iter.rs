@@ -2,7 +2,11 @@
 # Dowser: Dowser
 */
 
-use crate::NoHashState;
+use crate::{
+	DirConcurrency,
+	Entry,
+	NoHashState,
+};
 
 #[cfg(feature = "parking_lot_mutex")]
 use parking_lot::Mutex;
@@ -14,10 +18,7 @@ use rayon::iter::{
 };
 use std::{
 	collections::HashSet,
-	fs::DirEntry,
-	hash::Hasher,
-	num::NonZeroUsize,
-	os::unix::fs::MetadataExt,
+	ffi::OsStr,
 	path::{
 		Path,
 		PathBuf,
@@ -36,76 +37,6 @@ macro_rules! mutex { ($var:expr) => ($var.lock()); }
 #[cfg(not(feature = "parking_lot_mutex"))]
 /// # Helper: Unlock Mutex.
 macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner)); }
-
-
-
-/// # Resolved Path.
-///
-/// This tuple represents the hash, whether or not it is a directory, and the
-/// canonical path.
-type Resolved = (u64, bool, PathBuf);
-
-
-
-#[derive(Debug, Clone, Copy)]
-/// # Directory Concurrency.
-///
-/// This enum determines if and how many directories [`Dowser`] should try to
-/// read in parallel, which is configured via [`Dowser::with_dir_concurrency`].
-///
-/// The default is [`DirConcurrency::Sane`], which caps the maximum number of
-/// concurrent directory reads to `(CPU/Threads - 1).min(8)`. This is a good
-/// middle ground between [`DirConcurrency::Single`] and [`DirConcurrency::Max`].
-///
-/// If you anticipate there being very few directories, [`DirConcurrency::Single`]
-/// could actually be faster.
-///
-/// Conversely, if you expect _a lot_ of directories, [`DirConcurrency::Max`] is
-/// likely the best strategy. However **be careful** with this choice. If the user's
-/// `ulimit` is set too low, paths might be intermittently skipped due to
-/// unreadability.
-pub enum DirConcurrency {
-	/// # One at a Time.
-	Single,
-
-	/// # A Probably Okay Default.
-	Sane,
-
-	/// # READ EVERYTHING ALWAYS.
-	Max,
-
-	/// # A Custom Value.
-	Other(NonZeroUsize),
-}
-
-impl Default for DirConcurrency {
-	fn default() -> Self { Self::Sane }
-}
-
-impl From<usize> for DirConcurrency {
-	fn from(src: usize) -> Self {
-		match src {
-			0 => Self::Max,
-			1 => Self::Single,
-			// Safety: zero is checked above.
-			n => Self::Other(unsafe { NonZeroUsize::new_unchecked(n) }),
-		}
-	}
-}
-
-impl From<DirConcurrency> for usize {
-	fn from(src: DirConcurrency) -> Self {
-		match src {
-			DirConcurrency::Single => 1,
-			DirConcurrency::Sane => match rayon::current_num_threads() {
-				0..=2 => 1,
-				n => Self::min(n - 1, 8),
-			},
-			DirConcurrency::Max => 0,
-			DirConcurrency::Other(n) => n.get(),
-		}
-	}
-}
 
 
 
@@ -174,37 +105,25 @@ impl Default for Dowser {
 	}
 }
 
-impl From<PathBuf> for Dowser {
-	fn from(src: PathBuf) -> Self {
-		let mut out = Self::default();
-
-		if let Some((h, is_dir, p)) = resolve_path(src) {
-			if out.seen.insert(h) {
-				if is_dir { out.dirs.push(p); }
-				else { out.files.push(p); }
-			}
+macro_rules! from_single {
+	($($ty:ty),+ $(,)?) => ($(
+		impl From<$ty> for Dowser {
+			#[inline]
+			fn from(src: $ty) -> Self { Self::default().with_path(src) }
 		}
-
-		out
-	}
+	)+);
 }
 
-impl From<&Path> for Dowser {
-	fn from(src: &Path) -> Self { Self::from(src.to_path_buf()) }
-}
-
-impl From<&PathBuf> for Dowser {
-	fn from(src: &PathBuf) -> Self { Self::from(src.clone()) }
-}
+from_single!(&OsStr, &Path, PathBuf, &PathBuf, &str, String, &String);
 
 impl From<&[PathBuf]> for Dowser {
 	fn from(src: &[PathBuf]) -> Self {
 		let mut out = Self::default();
 
-		for (h, is_dir, p) in src.iter().filter_map(|p| resolve_path(p.clone())) {
-			if out.seen.insert(h) {
-				if is_dir { out.dirs.push(p); }
-				else { out.files.push(p); }
+		for e in src.iter().filter_map(Entry::from_path) {
+			if out.seen.insert(e.hash) {
+				if e.is_dir { out.dirs.push(e.path); }
+				else { out.files.push(e.path); }
 			}
 		}
 
@@ -216,10 +135,10 @@ impl From<Vec<PathBuf>> for Dowser {
 	fn from(src: Vec<PathBuf>) -> Self {
 		let mut out = Self::default();
 
-		for (h, is_dir, p) in src.into_iter().filter_map(resolve_path) {
-			if out.seen.insert(h) {
-				if is_dir { out.dirs.push(p); }
-				else { out.files.push(p); }
+		for e in src.into_iter().filter_map(Entry::from_path) {
+			if out.seen.insert(e.hash) {
+				if e.is_dir { out.dirs.push(e.path); }
+				else { out.files.push(e.path); }
 			}
 		}
 
@@ -230,6 +149,14 @@ impl From<Vec<PathBuf>> for Dowser {
 impl Iterator for Dowser {
 	type Item = PathBuf;
 
+	/// # Next!
+	///
+	/// This iterator yields canonical, deduplicated _file_ paths. Directories
+	/// are recursively traversed, but their paths are not returned.
+	///
+	/// Item ordering is arbitrary and likely to change from run-to-run, but
+	/// unless you hit a `ulimit`-type ceiling (see [`DirConcurrency`]), the
+	/// same items should always get returned.
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
 			// We have a file ready to go!
@@ -237,36 +164,35 @@ impl Iterator for Dowser {
 				return Some(p);
 			}
 
-			// Read some directories maybe!
+			// Are we out of things to do?
 			let len = self.dirs.len();
 			if len == 0 { break; }
-			if self.dir_concurrency == 1 || len == 1 {
+
+			// Read one directory in serial.
+			if self.dir_concurrency == 1 {
 				if let Ok(rd) = std::fs::read_dir(self.dirs.remove(len - 1)) {
-					for (h, is_dir, p) in rd.filter_map(resolve_entry) {
-						if self.seen.insert(h) {
-							if is_dir { self.dirs.push(p); }
-							else { self.files.push(p); }
+					for e in rd.filter_map(Entry::from_entry) {
+						if self.seen.insert(e.hash) {
+							if e.is_dir { self.dirs.push(e.path); }
+							else { self.files.push(e.path); }
 						}
 					}
 				}
 			}
+			// Read one or more directories in parallel.
 			else {
-				let idx =
-					if self.dir_concurrency == 0 { 0 }
-					else { len.saturating_sub(self.dir_concurrency) };
-
-				let new = self.dirs.split_off(idx);
-				let seen = Mutex::new(&mut self.seen);
+				let new = self.dirs.split_off(len.saturating_sub(self.dir_concurrency));
+				let s = Mutex::new(&mut self.seen);
 				let f = Mutex::new(&mut self.files);
 				let d = Mutex::new(&mut self.dirs);
 
 				new.into_par_iter()
 					.filter_map(|p| std::fs::read_dir(p).ok())
 					.flat_map(ParallelBridge::par_bridge)
-					.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
-						if mutex!(seen).insert(h) {
-							if is_dir { mutex!(d).push(p); }
-							else { mutex!(f).push(p); }
+					.for_each(|e| if let Some(e) = Entry::from_entry(e) {
+						if mutex!(s).insert(e.hash) {
+							if e.is_dir { mutex!(d).push(e.path); }
+							else { mutex!(f).push(e.path); }
 						}
 					});
 			}
@@ -278,7 +204,8 @@ impl Iterator for Dowser {
 	/// # Size Hints.
 	///
 	/// This iterator has an unknown size until the final directory has been
-	/// read.
+	/// read, after which point it is just a matter of flushing the files it
+	/// found there.
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		let lower = self.files.len();
 		let upper =
@@ -312,9 +239,7 @@ impl Dowser {
 	///     .collect();
 	/// ```
 	pub fn with_paths<P, I>(self, paths: I) -> Self
-	where
-		P: AsRef<Path>,
-		I: IntoIterator<Item=P> {
+	where P: AsRef<Path>, I: IntoIterator<Item=P> {
 		paths.into_iter().fold(self, Self::with_path)
 	}
 
@@ -338,10 +263,10 @@ impl Dowser {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some((h, is_dir, p)) = resolve_path(path.as_ref().to_path_buf()) {
-			if self.seen.insert(h) {
-				if is_dir { self.dirs.push(p); }
-				else { self.files.push(p); }
+		if let Some(e) = Entry::from_path(path) {
+			if self.seen.insert(e.hash) {
+				if e.is_dir { self.dirs.push(e.path); }
+				else { self.files.push(e.path); }
 			}
 		}
 
@@ -385,7 +310,7 @@ impl Dowser {
 	/// ```
 	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some(h) = resolve_path_hash(path.as_ref()) {
+		if let Some(h) = Entry::hash_path(path) {
 			self.seen.insert(h);
 		}
 
@@ -413,14 +338,8 @@ impl Dowser {
 	///     .collect();
 	/// ```
 	pub fn without_paths<P, I>(mut self, paths: I) -> Self
-	where
-		P: AsRef<Path>,
-		I: IntoIterator<Item=P> {
-		self.seen.extend(
-			paths.into_iter()
-				.filter_map(|p| resolve_path_hash(p.as_ref()))
-		);
-
+	where P: AsRef<Path>, I: IntoIterator<Item=P> {
+		self.seen.extend(paths.into_iter().filter_map(Entry::hash_path));
 		self
 	}
 }
@@ -433,7 +352,8 @@ impl Dowser {
 	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
 	///
 	/// It yields the same results as the above, but makes fewer allocations
-	/// along the way and applies your filter callback in parallel.
+	/// along the way and applies your filter callback in parallel (unless
+	/// [`DirConcurrency::Single`] was set).
 	///
 	/// ## Examples
 	///
@@ -463,28 +383,38 @@ impl Dowser {
 			files.retain(|p| cb(p));
 		}
 
-		// Consume!
-		{
+		// Consume the queue serially.
+		if dir_concurrency == 1 {
+			while let Some(p) = dirs.pop() {
+				if let Ok(rd) = std::fs::read_dir(p) {
+					for e in rd.filter_map(Entry::from_entry) {
+						if seen.insert(e.hash) {
+							if e.is_dir { dirs.push(e.path); }
+							else if cb(&e.path) { files.push(e.path); }
+						}
+					}
+				}
+			}
+		}
+		// Consume the queue in parallel.
+		else {
 			let s = Mutex::new(&mut seen);
 			let f = Mutex::new(&mut files);
 
 			loop {
 				let len = dirs.len();
 				if len == 0 { break; }
-				let idx =
-					if dir_concurrency == 0 { 0 }
-					else { len.saturating_sub(dir_concurrency) };
 
-				let new = dirs.split_off(idx);
+				let new = dirs.split_off(len.saturating_sub(dir_concurrency));
 				let d = Mutex::new(&mut dirs);
 
 				new.into_par_iter()
 					.filter_map(|p| std::fs::read_dir(p).ok())
 					.flat_map(ParallelBridge::par_bridge)
-					.for_each(|e| if let Some((h, is_dir, p)) = resolve_entry(e) {
-						if mutex!(s).insert(h) {
-							if is_dir { mutex!(d).push(p); }
-							else if cb(&p) { mutex!(f).push(p); }
+					.for_each(|e| if let Some(e) = Entry::from_entry(e) {
+						if mutex!(s).insert(e.hash) {
+							if e.is_dir { mutex!(d).push(e.path); }
+							else if cb(&e.path) { mutex!(f).push(e.path); }
 						}
 					});
 			}
@@ -493,67 +423,6 @@ impl Dowser {
 		// Done!
 		files
 	}
-}
-
-
-
-/// # Hash Path.
-fn hash_path(dev: u64, ino: u64) -> u64 {
-	let mut hasher = ahash::AHasher::new_with_keys(1319, 2371);
-	hasher.write_u64(dev);
-	hasher.write_u64(ino);
-	hasher.finish()
-}
-
-/// # Resolve Entry Result.
-///
-/// This is like `resolve_path`, except it assumes that any non-symlink entry
-/// path is canonical, because its parent path was canonical.
-///
-/// Symlinks get passed to `resolve_path`, ensuring they're fully
-/// canonicalized.
-fn resolve_entry(e: Result<DirEntry, std::io::Error>) -> Option<Resolved> {
-	let e = e.ok()?;
-
-	// If this is a symlink, we have to follow it.
-	if e.file_type().map_or(true, |ft| ft.is_symlink()) {
-		return resolve_path(e.path());
-	}
-
-	let meta = e.metadata().ok()?;
-	let path = e.path();
-	let hash: u64 = hash_path(meta.dev(), meta.ino());
-	Some((hash, meta.is_dir(), path))
-}
-
-/// # Resolve Path.
-///
-/// This attempts to cheaply resolve a given path, returning:
-/// * A unique hash derived from the path's device and inode.
-/// * A bool indicating whether or not the path is a directory.
-/// * The canonicalized path.
-fn resolve_path(path: PathBuf) -> Option<Resolved> {
-	let path = std::fs::canonicalize(path).ok()?;
-	let meta = std::fs::metadata(&path).ok()?;
-	let hash: u64 = hash_path(meta.dev(), meta.ino());
-	Some((hash, meta.is_dir(), path))
-}
-
-/// # Resolve Path Hash.
-///
-/// This is identical to `resolve_path`, except it only returns the hash. It
-/// is used by [`Dowser::without_paths`] and [`Dowser::without_path`], which
-/// don't need the rest.
-fn resolve_path_hash(path: &Path) -> Option<u64> {
-	if let Ok(meta) = std::fs::symlink_metadata(&path) {
-		if ! meta.is_symlink() {
-			return Some(hash_path(meta.dev(), meta.ino()));
-		}
-	}
-
-	let path = std::fs::canonicalize(path).ok()?;
-	let meta = std::fs::metadata(&path).ok()?;
-	Some(hash_path(meta.dev(), meta.ino()))
 }
 
 
@@ -582,7 +451,7 @@ mod tests {
 		assert!(! w1.contains(&abs_perr));
 
 		// From init.
-		let mut w2: Vec<PathBuf> = Dowser::from(PathBuf::from("tests/")).collect();
+		let mut w2: Vec<PathBuf> = Dowser::from("tests/").collect();
 		w1.sort();
 		w2.sort();
 		assert_eq!(w1, w2);
@@ -634,7 +503,8 @@ mod tests {
 
 		let trusting = {
 			let mut tmp: Vec<PathBuf> = raw.iter()
-				.filter_map(|x| resolve_path(x.clone()).map(|(_, _, p)| p))
+				.filter_map(|x| Entry::from_path(x))
+				.map(|e| e.path)
 				.collect();
 			tmp.sort();
 			tmp.dedup();
