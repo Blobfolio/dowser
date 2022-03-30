@@ -1,7 +1,7 @@
 # Project Dependencies
     Package:   dowser
-    Version:   0.4.4
-    Generated: 2022-03-28 01:41:42 UTC
+    Version:   0.4.5
+    Generated: 2022-03-30 03:16:19 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
@@ -11,10 +11,12 @@
 | [crossbeam-deque](https://github.com/crossbeam-rs/crossbeam) | 0.8.1 | The Crossbeam Project Developers | Apache-2.0 or MIT |
 | [crossbeam-epoch](https://github.com/crossbeam-rs/crossbeam) | 0.9.8 |  | Apache-2.0 or MIT |
 | [crossbeam-utils](https://github.com/crossbeam-rs/crossbeam) | 0.8.8 |  | Apache-2.0 or MIT |
+| [dactyl](https://github.com/Blobfolio/dactyl) | 0.3.3 | [Blobfolio, LLC.](mailto:hello@blobfolio.com) | WTFPL |
 | [either](https://github.com/bluss/either) | 1.6.1 | bluss | Apache-2.0 or MIT |
 | [lazy_static](https://github.com/rust-lang-nursery/lazy-static.rs) | 1.4.0 | [Marvin Löbel](mailto:loebel.marvin@gmail.com) | Apache-2.0 or MIT |
 | [lock_api](https://github.com/Amanieu/parking_lot) | 0.4.6 | [Amanieu d'Antras](mailto:amanieu@gmail.com) | Apache-2.0 or MIT |
 | [memoffset](https://github.com/Gilnaa/memoffset) | 0.6.5 | [Gilad Naaman](mailto:gilad.naaman@gmail.com) | MIT |
+| [num-traits](https://github.com/rust-num/num-traits) | 0.2.14 | The Rust Project Developers | Apache-2.0 or MIT |
 | [num_cpus](https://github.com/seanmonstar/num_cpus) | 1.13.1 | [Sean McArthur](mailto:sean@seanmonstar.com) | Apache-2.0 or MIT |
 | [parking_lot](https://github.com/Amanieu/parking_lot) | 0.12.0 | [Amanieu d'Antras](mailto:amanieu@gmail.com) | Apache-2.0 or MIT |
 | [parking_lot_core](https://github.com/Amanieu/parking_lot) | 0.9.1 | [Amanieu d'Antras](mailto:amanieu@gmail.com) | Apache-2.0 or MIT |
