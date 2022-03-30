@@ -2,6 +2,14 @@
 
 
 
+## [0.4.5](https://github.com/Blobfolio/dowser/releases/tag/v0.4.5) - 2022-03-29
+
+### Changed
+
+* Replace hasher with `dactyl::NoHash`
+
+
+
 ## [0.4.4](https://github.com/Blobfolio/dowser/releases/tag/v0.4.4) - 2022-03-27
 
 ### Added

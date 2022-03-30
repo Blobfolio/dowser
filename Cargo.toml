@@ -1,6 +1,6 @@
 [package]
 name = "dowser"
-version = "0.4.4"
+version = "0.4.5"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.56"
@@ -32,6 +32,7 @@ credits-dir = "./"
 
 [dependencies]
 ahash = "0.7.*"
+dactyl = "0.3.*, >=0.3.3"
 rayon = "1.5.*"
 
 [dependencies.parking_lot]

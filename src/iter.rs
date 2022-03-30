@@ -5,8 +5,8 @@
 use crate::{
 	DirConcurrency,
 	Entry,
-	NoHashState,
 };
+use dactyl::NoHash;
 
 #[cfg(feature = "parking_lot_mutex")]
 use parking_lot::Mutex;
@@ -91,7 +91,7 @@ pub struct Dowser {
 	files: Vec<PathBuf>,
 	dirs: Vec<PathBuf>,
 	dir_concurrency: usize,
-	seen: HashSet<u64, NoHashState>,
+	seen: HashSet<u64, NoHash>,
 }
 
 impl Default for Dowser {
@@ -100,7 +100,7 @@ impl Default for Dowser {
 			files: Vec::with_capacity(8),
 			dirs: Vec::with_capacity(8),
 			dir_concurrency: usize::from(DirConcurrency::Sane),
-			seen: HashSet::with_capacity_and_hasher(4096, NoHashState::default()),
+			seen: HashSet::with_capacity_and_hasher(4096, NoHash::default()),
 		}
 	}
 }
