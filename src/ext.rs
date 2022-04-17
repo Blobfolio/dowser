@@ -268,12 +268,7 @@ impl Extension {
 		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
 		let len: usize = bytes.len();
 
-		if
-			len > 3 &&
-			b'.' == bytes[len - 3] &&
-			bytes[len - 4] != b'/' &&
-			bytes[len - 4] != b'\\'
-		{
+		if 3 < len && b'.' == bytes[len - 3] && valid_pre_dot(bytes[len - 4]) {
 			Some(Self::Ext2(u16::from_le_bytes([
 				bytes[len - 2].to_ascii_lowercase(),
 				bytes[len - 1].to_ascii_lowercase(),
@@ -312,12 +307,7 @@ impl Extension {
 		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
 		let len: usize = bytes.len();
 
-		if
-			len > 4 &&
-			b'.' == bytes[len - 4] &&
-			bytes[len - 5] != b'/' &&
-			bytes[len - 5] != b'\\'
-		{
+		if 4 < len && b'.' == bytes[len - 4] && valid_pre_dot(bytes[len - 5]) {
 			Some(Self::Ext3(u32::from_le_bytes([
 				b'.',
 				bytes[len - 3].to_ascii_lowercase(),
@@ -358,12 +348,7 @@ impl Extension {
 		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
 		let len: usize = bytes.len();
 
-		if
-			len > 5 &&
-			b'.' == bytes[len - 5] &&
-			bytes[len - 6] != b'/' &&
-			bytes[len - 6] != b'\\'
-		{
+		if 5 < len && b'.' == bytes[len - 5] && valid_pre_dot(bytes[len - 6]) {
 			Some(Self::Ext4(u32::from_le_bytes([
 				bytes[len - 4].to_ascii_lowercase(),
 				bytes[len - 3].to_ascii_lowercase(),
@@ -505,6 +490,13 @@ impl Extension {
 		}
 	}
 }
+
+
+
+/// # Valid Pre-Dot Character.
+///
+/// This simply checks that a byte is not a path separator.
+const fn valid_pre_dot(b: u8) -> bool { ! matches!(b, b'/' | b'\\') }
 
 
 
