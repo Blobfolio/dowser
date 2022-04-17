@@ -187,6 +187,8 @@ impl Extension {
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
 	///
+	/// For compile-time generation, see [`Extension::codegen`].
+	///
 	/// ## Examples
 	///
 	/// ```
@@ -207,6 +209,8 @@ impl Extension {
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
 	///
+	/// For compile-time generation, see [`Extension::codegen`].
+	///
 	/// ## Examples
 	///
 	/// ```
@@ -226,6 +230,8 @@ impl Extension {
 	/// This method is intended for known values that you want to check
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
+	///
+	/// For compile-time generation, see [`Extension::codegen`].
 	///
 	/// ## Examples
 	///
