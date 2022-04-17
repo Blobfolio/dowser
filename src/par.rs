@@ -9,8 +9,8 @@ use std::num::NonZeroUsize;
 #[derive(Debug, Clone, Copy)]
 /// # Directory Concurrency.
 ///
-/// This enum determines if and how many directories [`Dowser`] should try to
-/// read in parallel, which is configured via [`Dowser::with_dir_concurrency`].
+/// This enum determines if and how many directories [`Dowser`](crate::Dowser) should try to
+/// read in parallel, which is configured via [`Dowser::with_dir_concurrency`](crate::Dowser::with_dir_concurrency).
 ///
 /// The default is [`DirConcurrency::Sane`], which caps the maximum number of
 /// concurrent directory reads to `rayon threads - 1` or `8`, whichever's
