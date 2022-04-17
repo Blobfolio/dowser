@@ -7,6 +7,7 @@
 ### Added
 
 * `Extension::codegen` (compile-time helper)
+* `Extension::slice_ext`
 
 
 

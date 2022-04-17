@@ -360,6 +360,67 @@ impl Extension {
 			None
 		}
 	}
+
+	#[must_use]
+	/// # Slice Extension.
+	///
+	/// This returns the file extension portion of a path as a byte slice,
+	/// similar to [`std::path::Path::extension`], but faster since it is dealing with
+	/// straight bytes.
+	///
+	/// The extension is found by jumping to the last period, ensuring the byte
+	/// _before_ that period is not a path separator, and that there are one or
+	/// more bytes _after_ that period (none of which are path separators).
+	///
+	/// If the above are all good, a slice containing everything after that
+	/// last period is returned.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// // Uppercase in, uppercase out.
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/IMAGE.JPEG".as_ref()),
+	///     Some(&b"JPEG"[..])
+	/// );
+	///
+	/// // Lowercase in, lowercase out.
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/file.docx".as_ref()),
+	///     Some(&b"docx"[..])
+	/// );
+	///
+	/// // These are all bad, though:
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/.htaccess".as_ref()),
+	///     None
+	/// );
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/".as_ref()),
+	///     None
+	/// );
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/file.".as_ref()),
+	///     None
+	/// );
+	/// ```
+	pub fn slice_ext(src: &Path) -> Option<&[u8]> {
+		let src = src.as_os_str().as_bytes();
+		let dot = src.iter().rposition(|&b| matches!(b, b'.' | b'/' | b'\\'))?;
+
+		if
+			0 < dot &&
+			dot + 1 < src.len() &&
+			src[dot] == b'.' &&
+			// Safety: we tested 0 < dot, so the subtraction won't overflow.
+			valid_pre_dot(unsafe { *(src.get_unchecked(dot - 1)) })
+		{
+			Some(&src[dot + 1..])
+		}
+		else { None }
+	}
 }
 
 /// # Codegen Helpers.
