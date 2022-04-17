@@ -388,32 +388,31 @@ impl Extension {
 	///
 	/// // Uppercase in, uppercase out.
 	/// assert_eq!(
-	///     Extension::slice_ext("/path/to/IMAGE.JPEG".as_ref()),
+	///     Extension::slice_ext(b"/path/to/IMAGE.JPEG".as_ref()),
 	///     Some(&b"JPEG"[..])
 	/// );
 	///
 	/// // Lowercase in, lowercase out.
 	/// assert_eq!(
-	///     Extension::slice_ext("/path/to/file.docx".as_ref()),
+	///     Extension::slice_ext(b"/path/to/file.docx".as_ref()),
 	///     Some(&b"docx"[..])
 	/// );
 	///
 	/// // These are all bad, though:
 	/// assert_eq!(
-	///     Extension::slice_ext("/path/to/.htaccess".as_ref()),
+	///     Extension::slice_ext(b"/path/to/.htaccess".as_ref()),
 	///     None
 	/// );
 	/// assert_eq!(
-	///     Extension::slice_ext("/path/to/".as_ref()),
+	///     Extension::slice_ext(b"/path/to/".as_ref()),
 	///     None
 	/// );
 	/// assert_eq!(
-	///     Extension::slice_ext("/path/to/file.".as_ref()),
+	///     Extension::slice_ext(b"/path/to/file.".as_ref()),
 	///     None
 	/// );
 	/// ```
-	pub fn slice_ext(src: &Path) -> Option<&[u8]> {
-		let src = src.as_os_str().as_bytes();
+	pub fn slice_ext(src: &[u8]) -> Option<&[u8]> {
 		let dot = src.iter().rposition(|&b| matches!(b, b'.' | b'/' | b'\\'))?;
 
 		if

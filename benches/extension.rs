@@ -44,7 +44,7 @@ benches!(
 
 	Bench::new("dowser::Extension", "slice_ext(/usr/share/image.jpg)")
 		.timed(Duration::from_secs(1))
-		.with(|| Extension::slice_ext(Path::new("/usr/share/image.jpg"))),
+		.with(|| Extension::slice_ext(b"/usr/share/image.jpg")),
 
 	Bench::new("std::path", "extension(/usr/share/image.jpg)")
 		.timed(Duration::from_secs(1))
