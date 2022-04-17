@@ -449,7 +449,7 @@ impl Extension {
 	/// ## Panics
 	///
 	/// This will panic if the extension (minus punctuation) is not 2-4 bytes
-	/// or contains whitespace.
+	/// or contains whitespace or path separators.
 	pub fn codegen(mut src: &[u8]) -> String {
 		// Jump past the last period, if any.
 		if let Some(pos) = src.iter().rposition(|b| b'.'.eq(b)) {
@@ -459,8 +459,8 @@ impl Extension {
 
 		// Make sure there is no whitespace.
 		assert!(
-			src.iter().all(|b| ! b.is_ascii_whitespace()),
-			"Extensions cannot contain whitespace."
+			src.iter().all(|b| ! b.is_ascii_whitespace() && b'/'.ne(b) && b'\\'.ne(b)),
+			"Extensions cannot contain whitespace or path separators."
 		);
 
 		match src.len() {
@@ -535,4 +535,8 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn t_codegen_bad2() { let _res = Extension::codegen(b"xhtml"); }
+
+	#[test]
+	#[should_panic]
+	fn t_codegen_bad3() { let _res = Extension::codegen(b"x./html"); }
 }
