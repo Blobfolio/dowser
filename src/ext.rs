@@ -554,6 +554,7 @@ impl Extension {
 
 
 
+#[inline]
 /// # Valid Pre-Dot Character.
 ///
 /// This simply checks that a byte is not a path separator.
