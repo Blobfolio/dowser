@@ -2,6 +2,10 @@
 # Dowser: Extension
 */
 
+use dactyl::{
+	NiceU16,
+	NiceU32,
+};
 use std::{
 	hash::{
 		Hash,
@@ -183,6 +187,8 @@ impl Extension {
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
 	///
+	/// For compile-time generation, see [`Extension::codegen`].
+	///
 	/// ## Examples
 	///
 	/// ```
@@ -203,6 +209,8 @@ impl Extension {
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
 	///
+	/// For compile-time generation, see [`Extension::codegen`].
+	///
 	/// ## Examples
 	///
 	/// ```
@@ -222,6 +230,8 @@ impl Extension {
 	/// This method is intended for known values that you want to check
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
+	///
+	/// For compile-time generation, see [`Extension::codegen`].
 	///
 	/// ## Examples
 	///
@@ -264,12 +274,7 @@ impl Extension {
 		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
 		let len: usize = bytes.len();
 
-		if
-			len > 3 &&
-			b'.' == bytes[len - 3] &&
-			bytes[len - 4] != b'/' &&
-			bytes[len - 4] != b'\\'
-		{
+		if 3 < len && b'.' == bytes[len - 3] && valid_pre_dot(bytes[len - 4]) {
 			Some(Self::Ext2(u16::from_le_bytes([
 				bytes[len - 2].to_ascii_lowercase(),
 				bytes[len - 1].to_ascii_lowercase(),
@@ -308,12 +313,7 @@ impl Extension {
 		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
 		let len: usize = bytes.len();
 
-		if
-			len > 4 &&
-			b'.' == bytes[len - 4] &&
-			bytes[len - 5] != b'/' &&
-			bytes[len - 5] != b'\\'
-		{
+		if 4 < len && b'.' == bytes[len - 4] && valid_pre_dot(bytes[len - 5]) {
 			Some(Self::Ext3(u32::from_le_bytes([
 				b'.',
 				bytes[len - 3].to_ascii_lowercase(),
@@ -354,12 +354,7 @@ impl Extension {
 		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
 		let len: usize = bytes.len();
 
-		if
-			len > 5 &&
-			b'.' == bytes[len - 5] &&
-			bytes[len - 6] != b'/' &&
-			bytes[len - 6] != b'\\'
-		{
+		if 5 < len && b'.' == bytes[len - 5] && valid_pre_dot(bytes[len - 6]) {
 			Some(Self::Ext4(u32::from_le_bytes([
 				bytes[len - 4].to_ascii_lowercase(),
 				bytes[len - 3].to_ascii_lowercase(),
@@ -371,4 +366,237 @@ impl Extension {
 			None
 		}
 	}
+
+	#[must_use]
+	/// # Slice Extension.
+	///
+	/// This returns the file extension portion of a path as a byte slice,
+	/// similar to [`std::path::Path::extension`], but faster since it is dealing with
+	/// straight bytes.
+	///
+	/// The extension is found by jumping to the last period, ensuring the byte
+	/// _before_ that period is not a path separator, and that there are one or
+	/// more bytes _after_ that period (none of which are path separators).
+	///
+	/// If the above are all good, a slice containing everything after that
+	/// last period is returned.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// // Uppercase in, uppercase out.
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/IMAGE.JPEG".as_ref()),
+	///     Some(&b"JPEG"[..])
+	/// );
+	///
+	/// // Lowercase in, lowercase out.
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/file.docx".as_ref()),
+	///     Some(&b"docx"[..])
+	/// );
+	///
+	/// // These are all bad, though:
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/.htaccess".as_ref()),
+	///     None
+	/// );
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/".as_ref()),
+	///     None
+	/// );
+	/// assert_eq!(
+	///     Extension::slice_ext("/path/to/file.".as_ref()),
+	///     None
+	/// );
+	/// ```
+	pub fn slice_ext(src: &Path) -> Option<&[u8]> {
+		let src = src.as_os_str().as_bytes();
+		let dot = src.iter().rposition(|&b| matches!(b, b'.' | b'/' | b'\\'))?;
+
+		if
+			0 < dot &&
+			dot + 1 < src.len() &&
+			src[dot] == b'.' &&
+			// Safety: we tested 0 < dot, so the subtraction won't overflow.
+			valid_pre_dot(unsafe { *(src.get_unchecked(dot - 1)) })
+		{
+			Some(&src[dot + 1..])
+		}
+		else { None }
+	}
+}
+
+/// # Codegen Helpers.
+impl Extension {
+	#[allow(clippy::needless_doctest_main)] // For demonstration!
+	#[must_use]
+	/// # Codegen Helper.
+	///
+	/// This _compile-time_ method can be used in a `build.rs` script to
+	/// generate a pre-computed [`Extension`] value of any supported length
+	/// (2-4 bytes).
+	///
+	/// Unlike the runtime methods, this will automatically fix case and period
+	/// inconsistencies, but ideally you should still pass it just the letters,
+	/// in lowercase, because you have the power to do so. Haha.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// // This is what it looks like.
+	/// assert_eq!(
+	///     Extension::codegen(b"js"),
+	///     "Extension::Ext2(29_546_u16)"
+	/// );
+	/// assert_eq!(
+	///     Extension::codegen(b"jpg"),
+	///     "Extension::Ext3(1_735_420_462_u32)"
+	/// );
+	/// assert_eq!(
+	///     Extension::codegen(b"html"),
+	///     "Extension::Ext4(1_819_112_552_u32)"
+	/// );
+	/// ```
+	///
+	/// In a typical `build.rs` workflow, you'd be building up a string of
+	/// other code around it, and saving it all to a file, like:
+	///
+	/// ```no_run
+	/// use dowser::Extension;
+	/// use std::fs::File;
+	/// use std::io::Write;
+	/// use std::path::PathBuf;
+	///
+	/// fn main() {
+	///     let out = format!(
+	///         "const MY_EXT: Extension = {};",
+	///         Extension::codegen(b"jpg")
+	///     );
+	///
+	///     let out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap())
+	///         .join("compile-time-vars.rs");
+	///     let mut f = File::create(out_path).unwrap();
+	///     f.write_all(out.as_bytes()).unwrap();
+	///     f.flush().unwrap();
+	/// }
+	///
+	/// ```
+	///
+	/// Then in your main program, say `lib.rs`, you'd toss an `include!()` to
+	/// that file to import the code _as code_, like:
+	///
+	/// ```no_run,ignore
+	/// use dowser::Extension;
+	///
+	/// include!(concat!(env!("OUT_DIR"), "/compile-time-vars.rs"));
+	/// ```
+	///
+	/// Et voilà, you've saved yourself a nanosecond of runtime effort! Haha.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the extension (minus punctuation) is not 2-4 bytes
+	/// or contains whitespace or path separators.
+	pub fn codegen(mut src: &[u8]) -> String {
+		// Jump past the last period, if any.
+		if let Some(pos) = src.iter().rposition(|b| b'.'.eq(b)) {
+			assert!(pos + 2 < src.len(), "Extensions must be 2-4 bytes (not including punctuation).");
+			src = &src[pos + 1..];
+		}
+
+		// Make sure there is no whitespace.
+		assert!(
+			src.iter().all(|b| ! b.is_ascii_whitespace() && b'/'.ne(b) && b'\\'.ne(b)),
+			"Extensions cannot contain whitespace or path separators."
+		);
+
+		match src.len() {
+			2 => [
+				"Extension::Ext2(",
+				NiceU16::with_separator(
+					u16::from_le_bytes([
+						src[0].to_ascii_lowercase(),
+						src[1].to_ascii_lowercase(),
+					]),
+					b'_',
+				).as_str(),
+				"_u16)",
+			].concat(),
+			3 => [
+				"Extension::Ext3(",
+				NiceU32::with_separator(
+					u32::from_le_bytes([
+						b'.',
+						src[0].to_ascii_lowercase(),
+						src[1].to_ascii_lowercase(),
+						src[2].to_ascii_lowercase(),
+					]),
+					b'_',
+				).as_str(),
+				"_u32)",
+			].concat(),
+			4 => [
+				"Extension::Ext4(",
+				NiceU32::with_separator(
+					u32::from_le_bytes([
+						src[0].to_ascii_lowercase(),
+						src[1].to_ascii_lowercase(),
+						src[2].to_ascii_lowercase(),
+						src[3].to_ascii_lowercase(),
+					]),
+					b'_',
+				).as_str(),
+				"_u32)",
+			].concat(),
+			_ => panic!("Extensions must be 2-4 bytes (not including punctuation)."),
+		}
+	}
+}
+
+
+
+#[inline]
+/// # Valid Pre-Dot Character.
+///
+/// This simply checks that a byte is not a path separator.
+const fn valid_pre_dot(b: u8) -> bool { ! matches!(b, b'/' | b'\\') }
+
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_codegen() {
+		assert_eq!(Extension::codegen(b"js"), "Extension::Ext2(29_546_u16)");
+		assert_eq!(Extension::codegen(b"JS"), "Extension::Ext2(29_546_u16)");
+		assert_eq!(Extension::codegen(b"/path/to/file.JS"), "Extension::Ext2(29_546_u16)");
+
+		assert_eq!(Extension::codegen(b"jpg"), "Extension::Ext3(1_735_420_462_u32)");
+		assert_eq!(Extension::codegen(b"JPG"), "Extension::Ext3(1_735_420_462_u32)");
+		assert_eq!(Extension::codegen(b".jpg"), "Extension::Ext3(1_735_420_462_u32)");
+
+		assert_eq!(Extension::codegen(b"html"), "Extension::Ext4(1_819_112_552_u32)");
+		assert_eq!(Extension::codegen(b"htML"), "Extension::Ext4(1_819_112_552_u32)");
+		assert_eq!(Extension::codegen(b"index.html"), "Extension::Ext4(1_819_112_552_u32)");
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_codegen_bad1() { let _res = Extension::codegen(b""); }
+
+	#[test]
+	#[should_panic]
+	fn t_codegen_bad2() { let _res = Extension::codegen(b"xhtml"); }
+
+	#[test]
+	#[should_panic]
+	fn t_codegen_bad3() { let _res = Extension::codegen(b"x./html"); }
 }

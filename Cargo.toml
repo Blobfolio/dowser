@@ -32,7 +32,7 @@ credits-dir = "./"
 
 [dependencies]
 ahash = "0.7.*"
-dactyl = "0.3.*, >=0.3.3"
+dactyl = "0.3.*, >=0.3.4"
 rayon = "1.5.*"
 
 [dependencies.parking_lot]
