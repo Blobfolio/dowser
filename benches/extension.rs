@@ -32,11 +32,21 @@ where P: AsRef<Path> {
 
 
 benches!(
-	Bench::new("dowser::Extension", "try_from3(/usr/share/image.jpg)")
+	Bench::new("dowser::Extension::try_from3(/usr/share/image.jpg)", "eq(JPG)")
 		.timed(Duration::from_secs(2))
 		.with(|| test_dowser("/usr/share/image.jpg")),
 
-	Bench::new("std::path", "extension(/usr/share/image.jpg)")
+	Bench::new("std::path::extension(/usr/share/image.jpg)", "eq(JPG)")
 		.timed(Duration::from_secs(2))
 		.with(|| test_std("/usr/share/image.jpg")),
+
+	Bench::spacer(),
+
+	Bench::new("dowser::Extension", "slice_ext(/usr/share/image.jpg)")
+		.timed(Duration::from_secs(1))
+		.with(|| Extension::slice_ext(Path::new("/usr/share/image.jpg"))),
+
+	Bench::new("std::path", "extension(/usr/share/image.jpg)")
+		.timed(Duration::from_secs(1))
+		.with(|| Path::new("/usr/share/image.jpg").extension()),
 );
