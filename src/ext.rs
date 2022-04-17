@@ -2,6 +2,10 @@
 # Dowser: Extension
 */
 
+use dactyl::{
+	NiceU16,
+	NiceU32,
+};
 use std::{
 	hash::{
 		Hash,
@@ -371,4 +375,164 @@ impl Extension {
 			None
 		}
 	}
+}
+
+/// # Codegen Helpers.
+impl Extension {
+	#[allow(clippy::needless_doctest_main)] // For demonstration!
+	#[must_use]
+	/// # Codegen Helper.
+	///
+	/// This _compile-time_ method can be used in a `build.rs` script to
+	/// generate a pre-computed [`Extension`] value of any supported length
+	/// (2-4 bytes).
+	///
+	/// Unlike the runtime methods, this will automatically fix case and period
+	/// inconsistencies, but ideally you should still pass it just the letters,
+	/// in lowercase, because you have the power to do so. Haha.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// // This is what it looks like.
+	/// assert_eq!(
+	///     Extension::codegen(b"js"),
+	///     "Extension::Ext2(29_546_u16)"
+	/// );
+	/// assert_eq!(
+	///     Extension::codegen(b"jpg"),
+	///     "Extension::Ext3(1_735_420_462_u32)"
+	/// );
+	/// assert_eq!(
+	///     Extension::codegen(b"html"),
+	///     "Extension::Ext4(1_819_112_552_u32)"
+	/// );
+	/// ```
+	///
+	/// In a typical `build.rs` workflow, you'd be building up a string of
+	/// other code around it, and saving it all to a file, like:
+	///
+	/// ```no_run
+	/// use dowser::Extension;
+	/// use std::fs::File;
+	/// use std::io::Write;
+	/// use std::path::PathBuf;
+	///
+	/// fn main() {
+	///     let out = format!(
+	///         "const MY_EXT: Extension = {};",
+	///         Extension::codegen(b"jpg")
+	///     );
+	///
+	///     let out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap())
+	///         .join("compile-time-vars.rs");
+	///     let mut f = File::create(out_path).unwrap();
+	///     f.write_all(out.as_bytes()).unwrap();
+	///     f.flush().unwrap();
+	/// }
+	///
+	/// ```
+	///
+	/// Then in your main program, say `lib.rs`, you'd toss an `include!()` to
+	/// that file to import the code _as code_, like:
+	///
+	/// ```no_run,ignore
+	/// use dowser::Extension;
+	///
+	/// include!(concat!(env!("OUT_DIR"), "/compile-time-vars.rs"));
+	/// ```
+	///
+	/// Et voilà, you've saved yourself a nanosecond of runtime effort! Haha.
+	///
+	/// ## Panics
+	///
+	/// This will panic if the extension (minus punctuation) is not 2-4 bytes
+	/// or contains whitespace.
+	pub fn codegen(mut src: &[u8]) -> String {
+		// Jump past the last period, if any.
+		if let Some(pos) = src.iter().rposition(|b| b'.'.eq(b)) {
+			assert!(pos + 2 < src.len(), "Extensions must be 2-4 bytes (not including punctuation).");
+			src = &src[pos + 1..];
+		}
+
+		// Make sure there is no whitespace.
+		assert!(
+			src.iter().all(|b| ! b.is_ascii_whitespace()),
+			"Extensions cannot contain whitespace."
+		);
+
+		match src.len() {
+			2 => [
+				"Extension::Ext2(",
+				NiceU16::with_separator(
+					u16::from_le_bytes([
+						src[0].to_ascii_lowercase(),
+						src[1].to_ascii_lowercase(),
+					]),
+					b'_',
+				).as_str(),
+				"_u16)",
+			].concat(),
+			3 => [
+				"Extension::Ext3(",
+				NiceU32::with_separator(
+					u32::from_le_bytes([
+						b'.',
+						src[0].to_ascii_lowercase(),
+						src[1].to_ascii_lowercase(),
+						src[2].to_ascii_lowercase(),
+					]),
+					b'_',
+				).as_str(),
+				"_u32)",
+			].concat(),
+			4 => [
+				"Extension::Ext4(",
+				NiceU32::with_separator(
+					u32::from_le_bytes([
+						src[0].to_ascii_lowercase(),
+						src[1].to_ascii_lowercase(),
+						src[2].to_ascii_lowercase(),
+						src[3].to_ascii_lowercase(),
+					]),
+					b'_',
+				).as_str(),
+				"_u32)",
+			].concat(),
+			_ => panic!("Extensions must be 2-4 bytes (not including punctuation)."),
+		}
+	}
+}
+
+
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn t_codegen() {
+		assert_eq!(Extension::codegen(b"js"), "Extension::Ext2(29_546_u16)");
+		assert_eq!(Extension::codegen(b"JS"), "Extension::Ext2(29_546_u16)");
+		assert_eq!(Extension::codegen(b"/path/to/file.JS"), "Extension::Ext2(29_546_u16)");
+
+		assert_eq!(Extension::codegen(b"jpg"), "Extension::Ext3(1_735_420_462_u32)");
+		assert_eq!(Extension::codegen(b"JPG"), "Extension::Ext3(1_735_420_462_u32)");
+		assert_eq!(Extension::codegen(b".jpg"), "Extension::Ext3(1_735_420_462_u32)");
+
+		assert_eq!(Extension::codegen(b"html"), "Extension::Ext4(1_819_112_552_u32)");
+		assert_eq!(Extension::codegen(b"htML"), "Extension::Ext4(1_819_112_552_u32)");
+		assert_eq!(Extension::codegen(b"index.html"), "Extension::Ext4(1_819_112_552_u32)");
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_codegen_bad1() { let _res = Extension::codegen(b""); }
+
+	#[test]
+	#[should_panic]
+	fn t_codegen_bad2() { let _res = Extension::codegen(b"xhtml"); }
 }

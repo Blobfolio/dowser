@@ -2,6 +2,14 @@
 
 
 
+## [0.4.6](https://github.com/Blobfolio/dowser/releases/tag/v0.4.6) - TBD
+
+### Added
+
+* `Extension::codegen` (compile-time helper)
+
+
+
 ## [0.4.5](https://github.com/Blobfolio/dowser/releases/tag/v0.4.5) - 2022-03-29
 
 ### Changed
