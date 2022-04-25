@@ -367,6 +367,7 @@ impl Extension {
 		}
 	}
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	/// # Slice Extension.
 	///

@@ -50,6 +50,7 @@ impl Default for DirConcurrency {
 }
 
 impl From<usize> for DirConcurrency {
+	#[allow(unsafe_code)]
 	fn from(src: usize) -> Self {
 		match src {
 			0 => Self::Max,
