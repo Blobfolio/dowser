@@ -280,9 +280,7 @@ impl Extension {
 				bytes[len - 1].to_ascii_lowercase(),
 			])))
 		}
-		else {
-			None
-		}
+		else { None }
 	}
 
 	#[must_use]
@@ -321,9 +319,7 @@ impl Extension {
 				bytes[len - 1].to_ascii_lowercase(),
 			])))
 		}
-		else {
-			None
-		}
+		else { None }
 	}
 
 	#[must_use]
@@ -362,9 +358,7 @@ impl Extension {
 				bytes[len - 1].to_ascii_lowercase(),
 			])))
 		}
-		else {
-			None
-		}
+		else { None }
 	}
 
 	#[allow(unsafe_code)]
