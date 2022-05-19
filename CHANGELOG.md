@@ -7,6 +7,7 @@
 ### Changed
 
 * Faster parallel iteration
+* Lower `DirConcurrency::Sane` from `threads - 1` to `threads / 2`
 
 
 

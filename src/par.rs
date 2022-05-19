@@ -13,17 +13,17 @@ use std::num::NonZeroUsize;
 /// read in parallel, which is configured via [`Dowser::with_dir_concurrency`](crate::Dowser::with_dir_concurrency).
 ///
 /// The default is [`DirConcurrency::Sane`], which caps the maximum number of
-/// concurrent directory reads to `rayon threads - 1` or `8`, whichever's
+/// concurrent directory reads to `rayon threads / 2` or `8`, whichever's
 /// smaller. This is a good middle ground between [`DirConcurrency::Single`] and
-/// [`DirConcurrency::Max`].
+/// [`DirConcurrency::Max`], but may not always be the best choice.
 ///
-/// If you anticipate there being very few paths of any kind, the serial
-/// [`DirConcurrency::Single`] option might actually prove faster.
+/// Any degree of parallelization runs the risk of tripping the user's `ulimit`
+/// system restrictions (by e.g. opening too many concurrent path handles). If
+/// this happens, paths might be intermittently skipped due to "unreadability"
+/// or the search may fail entirely.
 ///
-/// Conversely, if you expect _a lot_ of directories, [`DirConcurrency::Max`] is
-/// likely the best strategy. **However be careful** with this choice. If the user's
-/// `ulimit` is set too low, paths might be silently skipped due to intermittent
-/// unreadability.
+/// If you anticipate a large number of sub-paths or runtime environments with
+/// low `ulimit` caps, [`DirConcurrency::Single`] should be used instead.
 pub enum DirConcurrency {
 	/// # One at a Time.
 	///
@@ -71,8 +71,8 @@ impl From<DirConcurrency> for usize {
 	fn from(src: DirConcurrency) -> Self {
 		match src {
 			DirConcurrency::Sane => match rayon::current_num_threads() {
-				0..=2 => 1,
-				n => Self::min(n - 1, 8),
+				0..=3 => 1,
+				n => Self::min(n.wrapping_div(2), 8),
 			},
 			DirConcurrency::Single => 1,
 			DirConcurrency::Max => Self::MAX,
