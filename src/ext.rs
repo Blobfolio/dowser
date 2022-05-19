@@ -280,9 +280,7 @@ impl Extension {
 				bytes[len - 1].to_ascii_lowercase(),
 			])))
 		}
-		else {
-			None
-		}
+		else { None }
 	}
 
 	#[must_use]
@@ -321,9 +319,7 @@ impl Extension {
 				bytes[len - 1].to_ascii_lowercase(),
 			])))
 		}
-		else {
-			None
-		}
+		else { None }
 	}
 
 	#[must_use]
@@ -362,11 +358,10 @@ impl Extension {
 				bytes[len - 1].to_ascii_lowercase(),
 			])))
 		}
-		else {
-			None
-		}
+		else { None }
 	}
 
+	#[allow(unsafe_code)]
 	#[must_use]
 	/// # Slice Extension.
 	///
@@ -388,27 +383,27 @@ impl Extension {
 	///
 	/// // Uppercase in, uppercase out.
 	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/IMAGE.JPEG".as_ref()),
+	///     Extension::slice_ext(b"/path/to/IMAGE.JPEG"),
 	///     Some(&b"JPEG"[..])
 	/// );
 	///
 	/// // Lowercase in, lowercase out.
 	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/file.docx".as_ref()),
+	///     Extension::slice_ext(b"/path/to/file.docx"),
 	///     Some(&b"docx"[..])
 	/// );
 	///
 	/// // These are all bad, though:
 	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/.htaccess".as_ref()),
+	///     Extension::slice_ext(b"/path/to/.htaccess"),
 	///     None
 	/// );
 	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/".as_ref()),
+	///     Extension::slice_ext(b"/path/to/"),
 	///     None
 	/// );
 	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/file.".as_ref()),
+	///     Extension::slice_ext(b"/path/to/file."),
 	///     None
 	/// );
 	/// ```
