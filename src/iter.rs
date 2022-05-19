@@ -12,7 +12,8 @@ use dactyl::NoHash;
 use parking_lot::Mutex;
 
 use rayon::iter::{
-	IntoParallelIterator,
+	IndexedParallelIterator,
+	IntoParallelRefIterator,
 	ParallelBridge,
 	ParallelIterator,
 };
@@ -180,21 +181,26 @@ impl Iterator for Dowser {
 				}
 			}
 			// Read one or more directories in parallel.
-			else {
-				let new = self.dirs.split_off(len.saturating_sub(self.dir_concurrency));
+			else if ! self.dirs.is_empty() {
 				let s = Mutex::new(&mut self.seen);
 				let f = Mutex::new(&mut self.files);
-				let d = Mutex::new(&mut self.dirs);
 
-				new.into_par_iter()
+				let mut new: Vec<PathBuf> = self.dirs.par_iter()
+					.with_max_len(self.dir_concurrency)
 					.filter_map(|p| std::fs::read_dir(p).ok())
 					.flat_map(ParallelBridge::par_bridge)
-					.for_each(|e| if let Some(e) = Entry::from_entry(e) {
+					.filter_map(|e| {
+						let e = Entry::from_entry(e)?;
 						if mutex!(s).insert(e.hash) {
-							if e.is_dir { mutex!(d).push(e.path); }
-							else { mutex!(f).push(e.path); }
+							if e.is_dir { return Some(e.path); }
+							mutex!(f).push(e.path);
 						}
-					});
+						None
+					})
+					.collect();
+
+				self.dirs.truncate(0);
+				self.dirs.append(&mut new);
 			}
 		}
 
@@ -397,26 +403,28 @@ impl Dowser {
 			}
 		}
 		// Consume the queue in parallel.
-		else {
+		else if ! dirs.is_empty() {
 			let s = Mutex::new(&mut seen);
 			let f = Mutex::new(&mut files);
 
 			loop {
-				let len = dirs.len();
-				if len == 0 { break; }
-
-				let new = dirs.split_off(len.saturating_sub(dir_concurrency));
-				let d = Mutex::new(&mut dirs);
-
-				new.into_par_iter()
+				let mut new: Vec<PathBuf> = dirs.par_iter()
+					.with_max_len(dir_concurrency)
 					.filter_map(|p| std::fs::read_dir(p).ok())
 					.flat_map(ParallelBridge::par_bridge)
-					.for_each(|e| if let Some(e) = Entry::from_entry(e) {
+					.filter_map(|e| {
+						let e = Entry::from_entry(e)?;
 						if mutex!(s).insert(e.hash) {
-							if e.is_dir { mutex!(d).push(e.path); }
+							if e.is_dir { return Some(e.path); }
 							else if cb(&e.path) { mutex!(f).push(e.path); }
 						}
-					});
+						None
+					})
+					.collect();
+
+				if new.is_empty() { break; }
+				dirs.truncate(0);
+				dirs.append(&mut new);
 			}
 		}
 

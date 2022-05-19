@@ -2,6 +2,14 @@
 
 
 
+## [0.4.7](https://github.com/Blobfolio/dowser/releases/tag/v0.4.7) - 2022-05-18
+
+### Changed
+
+* Faster parallel iteration
+
+
+
 ## [0.4.6](https://github.com/Blobfolio/dowser/releases/tag/v0.4.6) - 2022-04-16
 
 ### Added
