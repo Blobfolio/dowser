@@ -166,35 +166,33 @@ impl Iterator for Dowser {
 			}
 
 			// Are we out of things to do?
-			let len = self.dirs.len();
-			if len == 0 { break; }
+			if self.dirs.is_empty() { break; }
 
-			if ! self.dirs.is_empty() {
-				let s = Mutex::new(&mut self.seen);
-				let f = Mutex::new(&mut self.files);
+			// Digest the directories we know about.
+			let s = Mutex::new(&mut self.seen);
+			let f = Mutex::new(&mut self.files);
 
-				let mut new: Vec<(PathBuf, u64)> = self.dirs.par_iter()
-					.with_max_len(DIR_CONCURRENCY)
-					.flat_map(|(p, dev)|
-						if let Ok(rd) = std::fs::read_dir(p) {
-							let dev = *dev;
-							rd.filter_map(|e| {
-								let e = Entry::from_entry(e, dev)?;
-								if mutex!(s).insert(e.hash) {
-									if e.is_dir { return Some((e.path, e.dev)); }
-									mutex!(f).push(e.path);
-								}
-								None
-							})
-							.collect()
-						}
-						else { Vec::new() }
-					)
-					.collect();
+			let mut new: Vec<(PathBuf, u64)> = self.dirs.par_iter()
+				.with_max_len(DIR_CONCURRENCY)
+				.flat_map(|(p, dev)|
+					if let Ok(rd) = std::fs::read_dir(p) {
+						let dev = *dev;
+						rd.filter_map(|e| {
+							let e = Entry::from_entry(e, dev)?;
+							if mutex!(s).insert(e.hash) {
+								if e.is_dir { return Some((e.path, e.dev)); }
+								mutex!(f).push(e.path);
+							}
+							None
+						})
+						.collect()
+					}
+					else { Vec::new() }
+				)
+				.collect();
 
-				self.dirs.truncate(0);
-				self.dirs.append(&mut new);
-			}
+			self.dirs.truncate(0);
+			self.dirs.append(&mut new);
 		}
 
 		None
