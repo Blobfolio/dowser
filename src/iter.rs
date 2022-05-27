@@ -9,7 +9,6 @@ use dactyl::NoHash;
 use parking_lot::Mutex;
 
 use rayon::iter::{
-	IndexedParallelIterator,
 	IntoParallelRefIterator,
 	ParallelIterator,
 };
@@ -34,14 +33,6 @@ macro_rules! mutex { ($var:expr) => ($var.lock()); }
 #[cfg(not(feature = "parking_lot_mutex"))]
 /// # Helper: Unlock Mutex.
 macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner)); }
-
-
-
-/// # Max Directory Concurrency.
-///
-/// This limit is unlikely to trigger, but tends to improve performance
-/// regardless by explicitly requiring the `IndexedParallelIterator` trait.
-const DIR_CONCURRENCY: usize = 16;
 
 
 
@@ -173,7 +164,6 @@ impl Iterator for Dowser {
 			let f = Mutex::new(&mut self.files);
 
 			let mut new: Vec<(PathBuf, u64)> = self.dirs.par_iter()
-				.with_max_len(DIR_CONCURRENCY)
 				.flat_map(|(p, dev)|
 					if let Ok(rd) = std::fs::read_dir(p) {
 						let dev = *dev;
@@ -373,7 +363,6 @@ impl Dowser {
 
 			loop {
 				let mut new: Vec<(PathBuf, u64)> = dirs.par_iter()
-					.with_max_len(DIR_CONCURRENCY)
 					.flat_map(|(p, dev)|
 						if let Ok(rd) = std::fs::read_dir(p) {
 							let dev = *dev;
