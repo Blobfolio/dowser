@@ -7,7 +7,6 @@ use brunch::{
 	benches,
 };
 use dowser::{
-	DirConcurrency,
 	Dowser,
 	Extension,
 };
@@ -21,10 +20,6 @@ benches!(
 	Bench::new("dowser::Dowser", "from(/usr/share)")
 		.timed(Duration::from_secs(6))
 		.with(|| Dowser::from("/usr/share").collect::<Vec<_>>()),
-
-	Bench::new("dowser::Dowser::from(/usr/share)", "with_dir_concurrency(Single)")
-		.timed(Duration::from_secs(6))
-		.with(|| Dowser::from("/usr/share").with_dir_concurrency(DirConcurrency::Single).collect::<Vec<_>>()),
 
 	Bench::spacer(),
 

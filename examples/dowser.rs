@@ -3,7 +3,6 @@
 */
 
 use dowser::{
-	DirConcurrency,
 	Dowser,
 	Extension,
 };
@@ -20,10 +19,9 @@ fn main() {
 	let now = Instant::now();
 	let files: Vec<PathBuf> = Dowser::default()
 		.with_path("/usr/share")
-		.with_dir_concurrency(DirConcurrency::Sane) // This is the default.
 		.into_vec(|p| Some(EXT) == Extension::try_from2(p));
 
-	println!("Search took {} seconds.", now.elapsed().as_millis() as f64 / 1000.0);
+	println!("Search took {} seconds.", now.elapsed().as_millis() as f64 / 1000.000);
 
 	// Show what we found.
 	if files.is_empty() {

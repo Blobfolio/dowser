@@ -118,7 +118,6 @@ let files: Vec::<PathBuf> = Dowser::default()
 mod ext;
 mod entry;
 mod iter;
-mod par;
 pub mod utility;
 
 
@@ -126,4 +125,3 @@ pub mod utility;
 pub(crate) use entry::Entry;
 pub use ext::Extension;
 pub use iter::Dowser;
-pub use par::DirConcurrency;
