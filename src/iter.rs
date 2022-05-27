@@ -40,8 +40,8 @@ macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::Poiso
 /// # Max Directory Concurrency.
 ///
 /// This limit is unlikely to trigger, but tends to improve performance
-/// regardless by explicitly requiring `IndexedParallelIterator`.
-const DIR_CONCURRENCY: usize = 32;
+/// regardless by explicitly requiring the `IndexedParallelIterator` trait.
+const DIR_CONCURRENCY: usize = 16;
 
 
 
