@@ -11,7 +11,7 @@ If those things sound nice, this library might be a good fit.
 
 On the other hand, [`Dowser`] is optimized for _file_ searching; the iterator crawls but does not yield directory paths.
 
-Additionally, path deduping relies on Unix metadata; **this library is not compatible with Windows**;
+Additionally, path deduping relies on Unix metadata; **this library is not compatible with Windows**.
 
 Depending on your needs, those limitations could be bad, in which case something like [`Walkdir`](https://crates.io/crates/walkdir) would make more sense.
 
@@ -23,7 +23,7 @@ Add `dowser` to your `dependencies` in `Cargo.toml`, like:
 
 ```text,ignore
 [dependencies]
-dowser = "0.4.*"
+dowser = "0.5.*"
 ```
 
 
