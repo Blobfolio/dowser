@@ -177,8 +177,9 @@ impl Iterator for Dowser {
 					.with_max_len(DIR_CONCURRENCY)
 					.flat_map(|(p, dev)|
 						if let Ok(rd) = std::fs::read_dir(p) {
+							let dev = *dev;
 							rd.filter_map(|e| {
-								let e = Entry::from_entry(e, *dev)?;
+								let e = Entry::from_entry(e, dev)?;
 								if mutex!(s).insert(e.hash) {
 									if e.is_dir { return Some((e.path, e.dev)); }
 									mutex!(f).push(e.path);
@@ -377,8 +378,9 @@ impl Dowser {
 					.with_max_len(DIR_CONCURRENCY)
 					.flat_map(|(p, dev)|
 						if let Ok(rd) = std::fs::read_dir(p) {
+							let dev = *dev;
 							rd.filter_map(|e| {
-								let e = Entry::from_entry(e, *dev)?;
+								let e = Entry::from_entry(e, dev)?;
 								if mutex!(s).insert(e.hash) {
 									if e.is_dir { return Some((e.path, e.dev)); }
 									else if cb(&e.path) { mutex!(f).push(e.path); }
