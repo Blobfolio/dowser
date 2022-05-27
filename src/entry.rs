@@ -41,16 +41,15 @@ impl Entry {
 		// If this is a symlink, we have to follow it.
 		let e = e.ok()?;
 		let ft = e.file_type().ok()?;
-		if ft.is_symlink() {
-			return Self::from_path(e.path());
+		if ft.is_symlink() { Self::from_path(e.path()) }
+		else {
+			Some(Self {
+				path: e.path(),
+				is_dir: ft.is_dir(),
+				dev, // Assume the device is unchanged.
+				hash: Self::hash_two(dev, e.ino()),
+			})
 		}
-
-		Some(Self {
-			path: e.path(),
-			is_dir: ft.is_dir(),
-			dev, // Assume the device is unchanged.
-			hash: Self::hash_two(dev, e.ino()),
-		})
 	}
 
 	#[must_use]
