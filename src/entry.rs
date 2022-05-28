@@ -19,6 +19,7 @@ use std::{
 
 
 
+#[allow(clippy::redundant_pub_crate)] // Fix this shit already. Haha.
 /// # File Entry.
 ///
 /// This holds a pre-computed hash, whether or not the path points to a
