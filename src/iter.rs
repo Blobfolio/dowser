@@ -5,7 +5,7 @@
 use crate::Entry;
 use dactyl::NoHash;
 use rayon::iter::{
-	IntoParallelRefIterator,
+	IntoParallelIterator,
 	ParallelIterator,
 };
 use std::{
@@ -154,26 +154,25 @@ impl Iterator for Dowser {
 			let s = Mutex::new(&mut self.seen);
 			let f = Mutex::new(&mut self.files);
 
-			let mut new: Vec<(PathBuf, u64)> = self.dirs.par_iter()
-				.flat_map(|(p, dev)|
-					if let Ok(rd) = std::fs::read_dir(p) {
-						let dev = *dev;
-						rd.filter_map(|e| {
-							let e = Entry::from_entry(e, dev)?;
-							if mutex!(s).insert(e.hash) {
-								if e.is_dir { return Some((e.path, e.dev)); }
-								mutex!(f).push(e.path);
-							}
-							None
-						})
-						.collect()
-					}
-					else { Vec::new() }
-				)
-				.collect();
+			// This little switcheroo allows us to push new directories
+			// straight into the original dirs collection.
+			let mut new = Vec::new();
+			std::mem::swap(&mut new, &mut self.dirs);
+			let d = Mutex::new(&mut self.dirs);
 
-			self.dirs.truncate(0);
-			self.dirs.append(&mut new);
+			new.into_par_iter()
+				.for_each(|(p, dev)|
+					if let Ok(rd) = std::fs::read_dir(p) {
+						for e in rd {
+							if let Some(e) = Entry::from_entry(e, dev) {
+								if mutex!(s).insert(e.hash) {
+									if e.is_dir { mutex!(d).push((e.path, e.dev)); }
+									else { mutex!(f).push(e.path); }
+								}
+							}
+						}
+					}
+				);
 		}
 
 		None
@@ -353,27 +352,28 @@ impl Dowser {
 			let f = Mutex::new(&mut files);
 
 			loop {
-				let mut new: Vec<(PathBuf, u64)> = dirs.par_iter()
-					.flat_map(|(p, dev)|
-						if let Ok(rd) = std::fs::read_dir(p) {
-							let dev = *dev;
-							rd.filter_map(|e| {
-								let e = Entry::from_entry(e, dev)?;
-								if mutex!(s).insert(e.hash) {
-									if e.is_dir { return Some((e.path, e.dev)); }
-									else if cb(&e.path) { mutex!(f).push(e.path); }
-								}
-								None
-							})
-							.collect()
-						}
-						else { Vec::new() }
-					)
-					.collect();
+				// This little switcheroo allows us to push new directories
+				// straight into the original dirs collection.
+				let mut new = Vec::new();
+				std::mem::swap(&mut new, &mut dirs);
+				let d = Mutex::new(&mut dirs);
 
-				if new.is_empty() { break; }
-				dirs.truncate(0);
-				dirs.append(&mut new);
+				new.into_par_iter()
+					.for_each(|(p, dev)|
+						if let Ok(rd) = std::fs::read_dir(p) {
+							for e in rd {
+								if let Some(e) = Entry::from_entry(e, dev) {
+									if mutex!(s).insert(e.hash) {
+										if e.is_dir { mutex!(d).push((e.path, e.dev)); }
+										else if cb(&e.path) { mutex!(f).push(e.path); }
+									}
+								}
+							}
+						}
+					);
+
+				drop(d);
+				if dirs.is_empty() { break; }
 			}
 		}
 
