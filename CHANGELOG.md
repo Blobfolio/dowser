@@ -2,6 +2,16 @@
 
 
 
+## [0.5.0](https://github.com/Blobfolio/dowser/releases/tag/v0.5.0) - TBD
+
+This release removes `DirConcurrency` and related methods.
+
+Parallel directory reads are now automatic and mandatory, but the inner loops — reading/filtering the contents of those directories — are now executed serially (within each parallel thread), greatly reducing the number of concurrently open file handles and subsequent risk of hitting `ulimit` ceilings.
+
+The file collision (uniqueness filters) have also been greatly improved, further reducing the number of syscalls and overall search times.
+
+
+
 ## [0.4.7](https://github.com/Blobfolio/dowser/releases/tag/v0.4.7) - 2022-05-18
 
 ### Changed

@@ -2,19 +2,14 @@
 # Dowser: Dowser
 */
 
-use crate::{
-	DirConcurrency,
-	Entry,
-};
+use crate::Entry;
 use dactyl::NoHash;
 
 #[cfg(feature = "parking_lot_mutex")]
 use parking_lot::Mutex;
 
 use rayon::iter::{
-	IndexedParallelIterator,
 	IntoParallelRefIterator,
-	ParallelBridge,
 	ParallelIterator,
 };
 use std::{
@@ -90,8 +85,7 @@ macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::Poiso
 /// ```
 pub struct Dowser {
 	files: Vec<PathBuf>,
-	dirs: Vec<PathBuf>,
-	dir_concurrency: usize,
+	dirs: Vec<(PathBuf, u64)>,
 	seen: HashSet<u64, NoHash>,
 }
 
@@ -100,7 +94,6 @@ impl Default for Dowser {
 		Self {
 			files: Vec::with_capacity(8),
 			dirs: Vec::with_capacity(8),
-			dir_concurrency: usize::from(DirConcurrency::Sane),
 			seen: HashSet::with_capacity_and_hasher(4096, NoHash::default()),
 		}
 	}
@@ -123,7 +116,7 @@ impl From<&[PathBuf]> for Dowser {
 
 		for e in src.iter().filter_map(Entry::from_path) {
 			if out.seen.insert(e.hash) {
-				if e.is_dir { out.dirs.push(e.path); }
+				if e.is_dir { out.dirs.push((e.path, e.dev)); }
 				else { out.files.push(e.path); }
 			}
 		}
@@ -138,7 +131,7 @@ impl From<Vec<PathBuf>> for Dowser {
 
 		for e in src.into_iter().filter_map(Entry::from_path) {
 			if out.seen.insert(e.hash) {
-				if e.is_dir { out.dirs.push(e.path); }
+				if e.is_dir { out.dirs.push((e.path, e.dev)); }
 				else { out.files.push(e.path); }
 			}
 		}
@@ -155,9 +148,7 @@ impl Iterator for Dowser {
 	/// This iterator yields canonical, deduplicated _file_ paths. Directories
 	/// are recursively traversed, but their paths are not returned.
 	///
-	/// Item ordering is arbitrary and likely to change from run-to-run, but
-	/// unless you hit a `ulimit`-type ceiling (see [`DirConcurrency`]), the
-	/// same items should always get returned.
+	/// Note: item ordering is arbitrary and likely to change from run-to-run.
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
 			// We have a file ready to go!
@@ -166,42 +157,32 @@ impl Iterator for Dowser {
 			}
 
 			// Are we out of things to do?
-			let len = self.dirs.len();
-			if len == 0 { break; }
+			if self.dirs.is_empty() { break; }
 
-			// Read one directory in serial.
-			if self.dir_concurrency == 1 {
-				if let Ok(rd) = std::fs::read_dir(self.dirs.remove(len - 1)) {
-					for e in rd.filter_map(Entry::from_entry) {
-						if self.seen.insert(e.hash) {
-							if e.is_dir { self.dirs.push(e.path); }
-							else { self.files.push(e.path); }
-						}
+			// Digest the directories we know about.
+			let s = Mutex::new(&mut self.seen);
+			let f = Mutex::new(&mut self.files);
+
+			let mut new: Vec<(PathBuf, u64)> = self.dirs.par_iter()
+				.flat_map(|(p, dev)|
+					if let Ok(rd) = std::fs::read_dir(p) {
+						let dev = *dev;
+						rd.filter_map(|e| {
+							let e = Entry::from_entry(e, dev)?;
+							if mutex!(s).insert(e.hash) {
+								if e.is_dir { return Some((e.path, e.dev)); }
+								mutex!(f).push(e.path);
+							}
+							None
+						})
+						.collect()
 					}
-				}
-			}
-			// Read one or more directories in parallel.
-			else if ! self.dirs.is_empty() {
-				let s = Mutex::new(&mut self.seen);
-				let f = Mutex::new(&mut self.files);
+					else { Vec::new() }
+				)
+				.collect();
 
-				let mut new: Vec<PathBuf> = self.dirs.par_iter()
-					.with_max_len(self.dir_concurrency)
-					.filter_map(|p| std::fs::read_dir(p).ok())
-					.flat_map(ParallelBridge::par_bridge)
-					.filter_map(|e| {
-						let e = Entry::from_entry(e)?;
-						if mutex!(s).insert(e.hash) {
-							if e.is_dir { return Some(e.path); }
-							mutex!(f).push(e.path);
-						}
-						None
-					})
-					.collect();
-
-				self.dirs.truncate(0);
-				self.dirs.append(&mut new);
-			}
+			self.dirs.truncate(0);
+			self.dirs.append(&mut new);
 		}
 
 		None
@@ -271,24 +252,11 @@ impl Dowser {
 	where P: AsRef<Path> {
 		if let Some(e) = Entry::from_path(path) {
 			if self.seen.insert(e.hash) {
-				if e.is_dir { self.dirs.push(e.path); }
+				if e.is_dir { self.dirs.push((e.path, e.dev)); }
 				else { self.files.push(e.path); }
 			}
 		}
 
-		self
-	}
-
-	#[must_use]
-	/// # With Directory Concurrency.
-	///
-	/// By default, [`Dowser`] processes directories in parallel, but only so
-	/// many at a time. This tends to provide a small performance boost for
-	/// most searches, but may not always be the best strategy.
-	///
-	/// See [`DirConcurrency`] for more information.
-	pub fn with_dir_concurrency(mut self, val: DirConcurrency) -> Self {
-		self.dir_concurrency = usize::from(val);
 		self
 	}
 }
@@ -358,8 +326,8 @@ impl Dowser {
 	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
 	///
 	/// It yields the same results as the above, but makes fewer allocations
-	/// along the way and applies your filter callback in parallel (unless
-	/// [`DirConcurrency::Single`] was set).
+	/// along the way, and executes the filter callback in parallel when
+	/// multiple directories are being traversed at once.
 	///
 	/// ## Examples
 	///
@@ -382,44 +350,34 @@ impl Dowser {
 	/// ```
 	pub fn into_vec<F>(self, cb: F) -> Vec<PathBuf>
 	where F: Fn(&Path) -> bool + Sync + Send {
-		let Self { mut files, mut dirs, dir_concurrency, mut seen } = self;
+		let Self { mut files, mut dirs, mut seen } = self;
 
 		// We wouldn't have had a chance to filter these yet.
 		if ! files.is_empty() {
 			files.retain(|p| cb(p));
 		}
 
-		// Consume the queue serially.
-		if dir_concurrency == 1 {
-			while let Some(p) = dirs.pop() {
-				if let Ok(rd) = std::fs::read_dir(p) {
-					for e in rd.filter_map(Entry::from_entry) {
-						if seen.insert(e.hash) {
-							if e.is_dir { dirs.push(e.path); }
-							else if cb(&e.path) { files.push(e.path); }
-						}
-					}
-				}
-			}
-		}
-		// Consume the queue in parallel.
-		else if ! dirs.is_empty() {
+		if ! dirs.is_empty() {
 			let s = Mutex::new(&mut seen);
 			let f = Mutex::new(&mut files);
 
 			loop {
-				let mut new: Vec<PathBuf> = dirs.par_iter()
-					.with_max_len(dir_concurrency)
-					.filter_map(|p| std::fs::read_dir(p).ok())
-					.flat_map(ParallelBridge::par_bridge)
-					.filter_map(|e| {
-						let e = Entry::from_entry(e)?;
-						if mutex!(s).insert(e.hash) {
-							if e.is_dir { return Some(e.path); }
-							else if cb(&e.path) { mutex!(f).push(e.path); }
+				let mut new: Vec<(PathBuf, u64)> = dirs.par_iter()
+					.flat_map(|(p, dev)|
+						if let Ok(rd) = std::fs::read_dir(p) {
+							let dev = *dev;
+							rd.filter_map(|e| {
+								let e = Entry::from_entry(e, dev)?;
+								if mutex!(s).insert(e.hash) {
+									if e.is_dir { return Some((e.path, e.dev)); }
+									else if cb(&e.path) { mutex!(f).push(e.path); }
+								}
+								None
+							})
+							.collect()
 						}
-						None
-					})
+						else { Vec::new() }
+					)
 					.collect();
 
 				if new.is_empty() { break; }

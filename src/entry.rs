@@ -4,13 +4,13 @@
 
 use ahash::AHasher;
 use std::{
-	fs::{
-		DirEntry,
-		Metadata,
-	},
+	fs::DirEntry,
 	hash::Hasher,
 	io::Result,
-	os::unix::fs::MetadataExt,
+	os::unix::fs::{
+		DirEntryExt,
+		MetadataExt,
+	},
 	path::{
 		Path,
 		PathBuf,
@@ -26,6 +26,7 @@ use std::{
 pub(super) struct Entry {
 	pub(super) path: PathBuf,
 	pub(super) is_dir: bool,
+	pub(super) dev: u64,
 	pub(super) hash: u64,
 }
 
@@ -36,20 +37,19 @@ impl Entry {
 	/// Because [`Dowser`] canonicalizes all seed paths, we can assume that
 	/// any non-symlinked `DirEntry` is also canonical, thus avoiding expensive
 	/// syscalls. (If it is, we'll canonicalize it first.)
-	pub(super) fn from_entry(e: Result<DirEntry>) -> Option<Self> {
+	pub(super) fn from_entry(e: Result<DirEntry>, dev: u64) -> Option<Self> {
 		// If this is a symlink, we have to follow it.
 		let e = e.ok()?;
-		if e.file_type().map_or(true, |ft| ft.is_symlink()) {
-			return Self::from_path(e.path());
+		let ft = e.file_type().ok()?;
+		if ft.is_symlink() { Self::from_path(e.path()) }
+		else {
+			Some(Self {
+				path: e.path(),
+				is_dir: ft.is_dir(),
+				dev, // Assume the device is unchanged.
+				hash: Self::hash_two(dev, e.ino()),
+			})
 		}
-
-		let meta = e.metadata().ok()?;
-
-		Some(Self {
-			path: e.path(),
-			is_dir: meta.is_dir(),
-			hash: Self::hash_meta(&meta),
-		})
 	}
 
 	#[must_use]
@@ -61,11 +61,13 @@ impl Entry {
 	where P: AsRef<Path> {
 		let path = std::fs::canonicalize(path).ok()?;
 		let meta = std::fs::metadata(&path).ok()?;
+		let dev = meta.dev();
 
 		Some(Self {
 			path,
 			is_dir: meta.is_dir(),
-			hash: Self::hash_meta(&meta),
+			dev,
+			hash: Self::hash_two(dev, meta.ino()),
 		})
 	}
 
@@ -74,10 +76,10 @@ impl Entry {
 	///
 	/// On Unix systems, file uniqueness means a unique device/inode
 	/// combination.
-	fn hash_meta(meta: &Metadata) -> u64 {
+	fn hash_two(dev: u64, ino: u64) -> u64 {
 		let mut hasher = AHasher::new_with_keys(1319, 2371);
-		hasher.write_u64(meta.dev());
-		hasher.write_u64(meta.ino());
+		hasher.write_u64(dev);
+		hasher.write_u64(ino);
 		hasher.finish()
 	}
 
@@ -90,15 +92,17 @@ impl Entry {
 	where P: AsRef<Path> {
 		let path = path.as_ref();
 
+		// If this isn't a symlink, the metadata device/inode can be trusted.
 		if let Ok(meta) = std::fs::symlink_metadata(path) {
 			if ! meta.is_symlink() {
-				return Some(Self::hash_meta(&meta));
+				return Some(Self::hash_two(meta.dev(), meta.ino()));
 			}
 		}
 
+		// Otherwise we should canonicalize first, then refetch the metadata.
 		std::fs::canonicalize(path)
 			.and_then(std::fs::metadata)
 			.ok()
-			.map(|m| Self::hash_meta(&m))
+			.map(|m| Self::hash_two(m.dev(), m.ino()))
 	}
 }
