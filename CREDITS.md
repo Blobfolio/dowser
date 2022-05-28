@@ -1,11 +1,11 @@
 # Project Dependencies
     Package:   dowser
-    Version:   0.4.7
-    Generated: 2022-05-19 17:36:15 UTC
+    Version:   0.5.0
+    Generated: 2022-05-28 00:29:25 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
-| [ahash](https://github.com/tkaitchuck/ahash) | 0.7.6 | [Tom Kaitchuck](mailto:Tom.Kaitchuck@gmail.com) | Apache-2.0 or MIT |
+| [ahash](https://github.com/tkaitchuck/ahash) | 0.7.6 | [Tom Kaitchuck](mailto:tom.kaitchuck@gmail.com) | Apache-2.0 or MIT |
 | [cfg-if](https://github.com/alexcrichton/cfg-if) | 1.0.0 | [Alex Crichton](mailto:alex@alexcrichton.com) | Apache-2.0 or MIT |
 | [crossbeam-channel](https://github.com/crossbeam-rs/crossbeam) | 0.5.4 |  | Apache-2.0 or MIT |
 | [crossbeam-deque](https://github.com/crossbeam-rs/crossbeam) | 0.8.1 | The Crossbeam Project Developers | Apache-2.0 or MIT |
