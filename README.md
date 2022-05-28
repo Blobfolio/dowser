@@ -33,22 +33,6 @@ dowser = "0.5.*"
 
 
 
-## Features
-
-| Feature | Description | Default |
-| ------- | ----------- | ------- |
-| `parking_lot_mutex` | Use `parking_lot::Mutex` instead of `std::sync::Mutex`. | Y |
-
-To use this feature, alter the `Cargo.toml` bit to read:
-
-```
-[dependencies.dowser]
-version = "0.4.*"
-features = [ "parking_lot_mutex" ]
-```
-
-
-
 ## Example
 
 All you need to do is chain `Dowser::default` with one or more of the

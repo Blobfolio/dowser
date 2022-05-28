@@ -2,6 +2,14 @@
 
 
 
+## [0.5.1](https://github.com/Blobfolio/dowser/releases/tag/v0.5.1) - TBD
+
+### Removed
+
+* Feature `parking_lot_mutex` (`std::sync::Mutex` is faster as of Rust `1.62`)
+
+
+
 ## [0.5.0](https://github.com/Blobfolio/dowser/releases/tag/v0.5.0) - 2022-05-27
 
 This release removes `DirConcurrency` and related methods.

@@ -4,10 +4,6 @@
 
 use crate::Entry;
 use dactyl::NoHash;
-
-#[cfg(feature = "parking_lot_mutex")]
-use parking_lot::Mutex;
-
 use rayon::iter::{
 	IntoParallelRefIterator,
 	ParallelIterator,
@@ -19,20 +15,15 @@ use std::{
 		Path,
 		PathBuf,
 	},
+	sync::Mutex,
 };
 
-#[cfg(not(feature = "parking_lot_mutex"))]
-use std::sync::Mutex;
 
 
-
-#[cfg(feature = "parking_lot_mutex")]
 /// # Helper: Unlock Mutex.
-macro_rules! mutex { ($var:expr) => ($var.lock()); }
-
-#[cfg(not(feature = "parking_lot_mutex"))]
-/// # Helper: Unlock Mutex.
-macro_rules! mutex { ($var:expr) => ($var.lock().unwrap_or_else(std::sync::PoisonError::into_inner)); }
+macro_rules! mutex {
+	($m:expr) => ($m.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
+}
 
 
 
