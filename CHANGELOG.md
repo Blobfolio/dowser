@@ -2,7 +2,11 @@
 
 
 
-## [0.5.1](https://github.com/Blobfolio/dowser/releases/tag/v0.5.1) - TBD
+## [0.5.1](https://github.com/Blobfolio/dowser/releases/tag/v0.5.1) - 2022-05-27
+
+### Fixed
+
+* Files could be erroneously skipped when crossing filesystem boundaries
 
 ### Removed
 

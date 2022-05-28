@@ -76,7 +76,7 @@ macro_rules! mutex {
 /// ```
 pub struct Dowser {
 	files: Vec<PathBuf>,
-	dirs: Vec<(PathBuf, u64)>,
+	dirs: Vec<PathBuf>,
 	seen: HashSet<u64, NoHash>,
 }
 
@@ -107,7 +107,7 @@ impl From<&[PathBuf]> for Dowser {
 
 		for e in src.iter().filter_map(Entry::from_path) {
 			if out.seen.insert(e.hash) {
-				if e.is_dir { out.dirs.push((e.path, e.dev)); }
+				if e.is_dir { out.dirs.push(e.path); }
 				else { out.files.push(e.path); }
 			}
 		}
@@ -122,7 +122,7 @@ impl From<Vec<PathBuf>> for Dowser {
 
 		for e in src.into_iter().filter_map(Entry::from_path) {
 			if out.seen.insert(e.hash) {
-				if e.is_dir { out.dirs.push((e.path, e.dev)); }
+				if e.is_dir { out.dirs.push(e.path); }
 				else { out.files.push(e.path); }
 			}
 		}
@@ -161,12 +161,12 @@ impl Iterator for Dowser {
 			let d = Mutex::new(&mut self.dirs);
 
 			new.into_par_iter()
-				.for_each(|(p, dev)|
+				.for_each(|p|
 					if let Ok(rd) = std::fs::read_dir(p) {
 						for e in rd {
-							if let Some(e) = Entry::from_entry(e, dev) {
+							if let Some(e) = Entry::from_entry(e) {
 								if mutex!(s).insert(e.hash) {
-									if e.is_dir { mutex!(d).push((e.path, e.dev)); }
+									if e.is_dir { mutex!(d).push(e.path); }
 									else { mutex!(f).push(e.path); }
 								}
 							}
@@ -242,7 +242,7 @@ impl Dowser {
 	where P: AsRef<Path> {
 		if let Some(e) = Entry::from_path(path) {
 			if self.seen.insert(e.hash) {
-				if e.is_dir { self.dirs.push((e.path, e.dev)); }
+				if e.is_dir { self.dirs.push(e.path); }
 				else { self.files.push(e.path); }
 			}
 		}
@@ -274,8 +274,9 @@ impl Dowser {
 	/// ```
 	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some(h) = Entry::hash_path(path) {
-			self.seen.insert(h);
+		if let Ok(p) = std::fs::canonicalize(path) {
+			let hash = Entry::hash_path(&p);
+			self.seen.insert(hash);
 		}
 
 		self
@@ -303,7 +304,9 @@ impl Dowser {
 	/// ```
 	pub fn without_paths<P, I>(mut self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		self.seen.extend(paths.into_iter().filter_map(Entry::hash_path));
+		self.seen.extend(paths.into_iter().filter_map(|p|
+			std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
+		));
 		self
 	}
 }
@@ -359,12 +362,12 @@ impl Dowser {
 				let d = Mutex::new(&mut dirs);
 
 				new.into_par_iter()
-					.for_each(|(p, dev)|
+					.for_each(|p|
 						if let Ok(rd) = std::fs::read_dir(p) {
 							for e in rd {
-								if let Some(e) = Entry::from_entry(e, dev) {
+								if let Some(e) = Entry::from_entry(e) {
 									if mutex!(s).insert(e.hash) {
-										if e.is_dir { mutex!(d).push((e.path, e.dev)); }
+										if e.is_dir { mutex!(d).push(e.path); }
 										else if cb(&e.path) { mutex!(f).push(e.path); }
 									}
 								}
