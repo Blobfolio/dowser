@@ -2,6 +2,14 @@
 
 
 
+## [0.5.2](https://github.com/Blobfolio/dowser/releases/tag/v0.5.2) - 2022-06-18
+
+### Misc
+
+* Update dependencies.
+
+
+
 ## [0.5.1](https://github.com/Blobfolio/dowser/releases/tag/v0.5.1) - 2022-05-27
 
 ### Fixed

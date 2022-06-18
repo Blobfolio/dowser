@@ -1,9 +1,9 @@
 [package]
 name = "dowser"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
-rust-version = "1.56"
+rust-version = "1.61"
 description = "A multi-threaded, recursive file finding library for Unix."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/dowser"
@@ -31,7 +31,7 @@ credits-dir = "./"
 
 [dependencies]
 ahash = "=0.7.6"
-dactyl = "0.3.*, >=0.3.4"
+dactyl = "0.4.*"
 rayon = "=1.5.3"
 
 [dev-dependencies]
