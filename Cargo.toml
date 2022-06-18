@@ -31,7 +31,7 @@ credits-dir = "./"
 
 [dependencies]
 ahash = "=0.7.6"
-dactyl = "0.3.*, >=0.3.4"
+dactyl = "0.4.*"
 rayon = "=1.5.3"
 
 [dev-dependencies]
