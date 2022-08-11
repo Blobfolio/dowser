@@ -2,6 +2,14 @@
 
 
 
+## [0.5.3](https://github.com/Blobfolio/dowser/releases/tag/v0.5.3) - 2022-08-11
+
+### Changed
+
+* Bump ahash `0.8.0`
+
+
+
 ## [0.5.2](https://github.com/Blobfolio/dowser/releases/tag/v0.5.2) - 2022-06-18
 
 ### Misc

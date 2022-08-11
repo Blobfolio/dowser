@@ -70,7 +70,7 @@ impl Entry {
 	/// Since all paths are canonical, we can test for uniqueness by simply
 	/// hashing the them.
 	pub(super) fn hash_path(path: &Path) -> u64 {
-		let mut hasher = AHasher::new_with_keys(1319, 2371);
+		let mut hasher = AHasher::default();
 		hasher.write(path.as_os_str().as_bytes());
 		hasher.finish()
 	}

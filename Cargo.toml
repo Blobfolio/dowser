@@ -30,7 +30,7 @@ man-dir = "./"
 credits-dir = "./"
 
 [dependencies]
-ahash = "=0.7.6"
+ahash = "=0.8.0"
 dactyl = "0.4.*"
 rayon = "=1.5.3"
 
