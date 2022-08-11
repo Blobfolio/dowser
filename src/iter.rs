@@ -375,7 +375,6 @@ impl Dowser {
 						}
 					);
 
-				drop(d);
 				if dirs.is_empty() { break; }
 			}
 		}
