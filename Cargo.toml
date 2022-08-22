@@ -35,7 +35,7 @@ dactyl = "0.4.*"
 rayon = "=1.5.3"
 
 [dev-dependencies]
-brunch = "0.2.*, >=0.2.4"
+brunch = "0.3.*"
 
 [[bench]]
 name = "dowser"
