@@ -37,7 +37,8 @@ use std::{
 /// If using `without_*`, be sure to chain those _first_, before any `with_*`
 /// calls, just in case your withs and withouts overlap. ;)
 ///
-/// From there, just do your normal iterator business.
+/// From there, you can do your normal [`Iterator`](std::iter::Iterator) business, or if you just want to
+/// collect the results into a vector, call [`Dowser::into_vec`] or [`Dowser::into_vec_filtered`].
 ///
 /// ## Examples
 ///
@@ -183,7 +184,7 @@ impl Dowser {
 	/// [`Dowser::with_path`] to add such an object directly.
 	pub fn with_paths<P, I>(self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(! is_singular_path(&paths), "Dowser::with_paths cannot accept a Path/PathBuf directly; arguments must be a collection.");
+		assert!(! is_singular_path(&paths), "Dowser::with_paths cannot accept a single Path/PathBuf object; it requires a collection (even if it only has one entry).");
 		paths.into_iter().fold(self, Self::with_path)
 	}
 
@@ -277,7 +278,7 @@ impl Dowser {
 	/// [`Dowser::without_path`] to add such an object directly.
 	pub fn without_paths<P, I>(mut self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(! is_singular_path(&paths), "Dowser::without_paths cannot accept a Path/PathBuf directly; arguments must be a collection.");
+		assert!(! is_singular_path(&paths), "Dowser::without_paths cannot accept a single Path/PathBuf object; it requires a collection (even if it only has one entry).");
 
 		self.seen.extend(paths.into_iter().filter_map(|p|
 			std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
@@ -288,6 +289,62 @@ impl Dowser {
 
 impl Dowser {
 	#[must_use]
+	/// # Consume Into Vec.
+	///
+	/// This method is an optimized alternative to running
+	/// `Dowser.iter().collect::<Vec<PathBuf>>()`.
+	///
+	/// It yields the same results as the above, but makes fewer allocations
+	/// along the way.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// // The iterator way.
+	/// let files: Vec<PathBuf> = Dowser::default()
+	///     .with_path("/usr/share")
+	///     .collect();
+	///
+	/// // The optimized way.
+	/// let files: Vec<PathBuf> = Dowser::default()
+	///     .with_path("/usr/share")
+	///     .into_vec();
+	/// ```
+	pub fn into_vec(self) -> Vec<PathBuf> {
+		let Self { mut files, mut dirs, mut seen } = self;
+
+		if ! dirs.is_empty() {
+			loop {
+				// This little switcheroo allows us to push new directories
+				// straight into the original dirs collection.
+				let mut new = Vec::new();
+				std::mem::swap(&mut new, &mut dirs);
+
+				for p in new {
+					if let Ok(rd) = std::fs::read_dir(p) {
+						for e in rd {
+							if let Some(e) = Entry::from_entry(e) {
+								if seen.insert(e.hash) {
+									if e.is_dir { dirs.push(e.path); }
+									else { files.push(e.path); }
+								}
+							}
+						}
+					}
+				}
+
+				if dirs.is_empty() { break; }
+			}
+		}
+
+		// Done!
+		files
+	}
+
+	#[must_use]
 	/// # Consume Into Vec (Filtered).
 	///
 	/// This method is an optimized alternative to running
@@ -295,6 +352,10 @@ impl Dowser {
 	///
 	/// It yields the same results as the above, but makes fewer allocations
 	/// along the way.
+	///
+	/// Note: every entry passed to your callback will be a valid, canonical
+	/// file path. (You don't have to explicitly test for [`is_file`](std::path::Path::is_file) or
+	/// anything like that.)
 	///
 	/// ## Examples
 	///
@@ -313,9 +374,9 @@ impl Dowser {
 	/// // The optimized way.
 	/// let files: Vec<PathBuf> = Dowser::default()
 	///     .with_path("/usr/share")
-	///     .into_vec(|p| Some(GZ) == Extension::try_from2(p));
+	///     .into_vec_filtered(|p| Some(GZ) == Extension::try_from2(p));
 	/// ```
-	pub fn into_vec<F>(self, cb: F) -> Vec<PathBuf>
+	pub fn into_vec_filtered<F>(self, cb: F) -> Vec<PathBuf>
 	where F: Fn(&Path) -> bool + Sync + Send {
 		let Self { mut files, mut dirs, mut seen } = self;
 
@@ -358,13 +419,14 @@ impl Dowser {
 /// # Is Singular Path?
 ///
 /// Returns true if the type seems to be a singular `Path`/`PathBuf` object.
+/// This is necessary to differentiate them from proper collections
+/// implementing `IntoIterator<AsRef<Path>>`, at least until negative trait
+/// bounds are stabilized.
 fn is_singular_path<T>(raw: T) -> bool {
-	fn type_of<T>(_: T) -> &'static str {
-		std::any::type_name::<T>()
-	}
+	fn type_of<T>(_: T) -> &'static str { std::any::type_name::<T>() }
 
-	let kind = type_of(raw);
-	kind.ends_with("std::path::Path") || kind.ends_with("std::path::PathBuf")
+	let kind = type_of(raw).trim_start_matches('&');
+	kind == "std::path::Path" || kind == "std::path::PathBuf"
 }
 
 
@@ -463,7 +525,7 @@ mod tests {
 		itered.sort();
 		assert_eq!(canon, itered);
 
-		itered = Dowser::from(test_dir.as_path()).into_vec(|_| true);
+		itered = Dowser::from(test_dir.as_path()).into_vec_filtered(|_| true);
 		itered.sort();
 		assert_eq!(canon, itered);
 	}

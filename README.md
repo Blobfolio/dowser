@@ -41,19 +41,26 @@ All you need to do is chain `Dowser::default` with one or more of the following 
 * `Dowser::with_path` / `Dowser::with_paths`
 * `Dowser::without_path` / `Dowser::without_paths`
 
-From there, you can use whatever `Iterator` methods you want.
+From there, you can apply any `Iterator` methods you want, or immediately collect the results using `Dowser::into_vec` or `Dowser::into_vec_filtered`.
 
 ```rust
 use dowser::Dowser;
 use std::path::PathBuf;
 
 // Return all files under "/usr/share/man".
-let files: Vec::<PathBuf> = Dowser::default()
+let files1: Vec::<PathBuf> = Dowser::default()
     .with_path("/usr/share/man")
     .collect();
 
+// Same as above, but slightly faster.
+let files2: Vec::<PathBuf> = Dowser::default()
+    .with_path("/usr/share/man")
+    .into_vec();
+
+assert_eq!(files1.len(), files2.len());
+
 // Return only Gzipped files using callback filter.
-let files: Vec::<PathBuf> = Dowser::default()
+let files1: Vec::<PathBuf> = Dowser::default()
     .with_path("/usr/share/man")
     .filter(|p|
         p.extension().map_or(
@@ -62,6 +69,18 @@ let files: Vec::<PathBuf> = Dowser::default()
         )
     )
     .collect();
+
+// Same as above, but slightly faster.
+let files2: Vec::<PathBuf> = Dowser::default()
+    .with_path("/usr/share/man")
+    .into_vec_filtered(|p|
+        p.extension().map_or(
+            false,
+            |e| e.eq_ignore_ascii_case("gz")
+        )
+    );
+
+assert_eq!(files1.len(), files2.len());
 ```
 
 

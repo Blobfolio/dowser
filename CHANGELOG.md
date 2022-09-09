@@ -7,6 +7,9 @@
 ### Changed
 
 * Traversal is now fully serial. (Multi-threading came with too many gotchas and didn't improve performance much for most workloads.)
+* `Dowser::into_vec` now collects _all_ paths without applying a callback.
+* `Dowser::into_vec_filtered` has been added for collecting _filtered_ paths.
+* `Dowser::with_paths` and `Dowser::without_paths` — the plural methods — will now panic if passed a direct `Path` or `PathBuf` object (rather than a collection of same).
 
 
 

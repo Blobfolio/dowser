@@ -19,7 +19,7 @@ fn main() {
 	let now = Instant::now();
 	let files: Vec<PathBuf> = Dowser::default()
 		.with_path("/usr/share")
-		.into_vec(|p| Some(EXT) == Extension::try_from2(p));
+		.into_vec_filtered(|p| Some(EXT) == Extension::try_from2(p));
 
 	println!("Search took {} seconds.", now.elapsed().as_millis() as f64 / 1000.000);
 
