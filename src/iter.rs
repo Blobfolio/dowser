@@ -4,10 +4,6 @@
 
 use crate::Entry;
 use dactyl::NoHash;
-use rayon::iter::{
-	IntoParallelIterator,
-	ParallelIterator,
-};
 use std::{
 	collections::HashSet,
 	ffi::OsStr,
@@ -15,24 +11,16 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	sync::Mutex,
 };
-
-
-
-/// # Helper: Unlock Mutex.
-macro_rules! mutex {
-	($m:expr) => ($m.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
-}
 
 
 
 #[derive(Debug, Clone)]
 /// # Dowser.
 ///
-/// `Dowser` is a very simple recursive file iterator with parallelized
-/// crawling for performance. Symlinks and hidden nodes are followed like any
-/// other, and all results are canonicalized and deduped prior to yielding.
+/// `Dowser` is a very simple recursive file iterator. Symlinks and hidden
+/// nodes are followed like any other, and all results are canonicalized and
+/// deduped prior to yielding.
 ///
 /// ## Usage
 ///
@@ -51,17 +39,6 @@ macro_rules! mutex {
 ///
 /// From there, just do your normal iterator business.
 ///
-/// ## Gotchas
-///
-/// Because `Dowser` internally implements multi-threading, you should not try
-/// to do something like `Dowser::default().par_bridge()`; that will just make
-/// everything slower.
-///
-/// `Dowser` leaves some threads in reserve to help mitigate system caps like
-/// `ulimit`, but if the user running the program has a very low `ulimit` set,
-/// the results may be inconsistent from run to run. In such cases, please
-/// refer to your operating system's instructions for increasing the limit.
-///
 /// ## Examples
 ///
 /// ```no_run
@@ -70,8 +47,8 @@ macro_rules! mutex {
 ///
 /// let files: Vec<PathBuf> = Dowser::default()
 ///     .with_path("/usr/share")
-///     // You could filter_map(), etc., here. All paths returned are canonical,
-///     // valid files.
+///     // You could filter_map(), etc., here, with the understanding that
+///     // every path you get will belong to a valid, canonical file.
 ///     .collect();
 /// ```
 pub struct Dowser {
@@ -147,32 +124,20 @@ impl Iterator for Dowser {
 				return Some(p);
 			}
 
-			// Are we out of things to do?
-			if self.dirs.is_empty() { break; }
-
-			// Digest the directories we know about.
-			let s = Mutex::new(&mut self.seen);
-			let f = Mutex::new(&mut self.files);
-
-			// This little switcheroo allows us to push new directories
-			// straight into the original dirs collection.
-			let mut new = Vec::new();
-			std::mem::swap(&mut new, &mut self.dirs);
-			let d = Mutex::new(&mut self.dirs);
-
-			new.into_par_iter()
-				.for_each(|p|
-					if let Ok(rd) = std::fs::read_dir(p) {
-						for e in rd {
-							if let Some(e) = Entry::from_entry(e) {
-								if mutex!(s).insert(e.hash) {
-									if e.is_dir { mutex!(d).push(e.path); }
-									else { mutex!(f).push(e.path); }
-								}
+			if let Some(p) = self.dirs.pop() {
+				if let Ok(rd) = std::fs::read_dir(p) {
+					for e in rd {
+						if let Some(e) = Entry::from_entry(e) {
+							if self.seen.insert(e.hash) {
+								if e.is_dir { self.dirs.push(e.path); }
+								else { self.files.push(e.path); }
 							}
 						}
 					}
-				);
+				}
+			}
+			// We're out of things to do!
+			else { break; }
 		}
 
 		None
@@ -200,11 +165,6 @@ impl Dowser {
 	///
 	/// Queue up multiple file and/or directory paths.
 	///
-	/// ## Warning
-	///
-	/// **Do not** pass a single `Path` or `PathBuf` to this method. If you
-	/// need to add just one path, use [`Dowser::with_path`] instead.
-	///
 	/// ## Examples
 	///
 	/// ```no_run
@@ -215,8 +175,15 @@ impl Dowser {
 	///     .with_paths(&["/my/dir"])
 	///     .collect();
 	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic if you try to pass a single `Path` or `PathBuf` object
+	/// directly to this method (instead of a collection of same). Use
+	/// [`Dowser::with_path`] to add such an object directly.
 	pub fn with_paths<P, I>(self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
+		assert!(! is_singular_path(&paths), "Dowser::with_paths cannot accept a Path/PathBuf directly; arguments must be a collection.");
 		paths.into_iter().fold(self, Self::with_path)
 	}
 
@@ -302,8 +269,16 @@ impl Dowser {
 	///     .with_path("/my/dir")
 	///     .collect();
 	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic if you try to pass a single `Path` or `PathBuf` object
+	/// directly to this method (instead of a collection of same). Use
+	/// [`Dowser::without_path`] to add such an object directly.
 	pub fn without_paths<P, I>(mut self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
+		assert!(! is_singular_path(&paths), "Dowser::without_paths cannot accept a Path/PathBuf directly; arguments must be a collection.");
+
 		self.seen.extend(paths.into_iter().filter_map(|p|
 			std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
 		));
@@ -319,8 +294,7 @@ impl Dowser {
 	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
 	///
 	/// It yields the same results as the above, but makes fewer allocations
-	/// along the way, and executes the filter callback in parallel when
-	/// multiple directories are being traversed at once.
+	/// along the way.
 	///
 	/// ## Examples
 	///
@@ -351,29 +325,24 @@ impl Dowser {
 		}
 
 		if ! dirs.is_empty() {
-			let s = Mutex::new(&mut seen);
-			let f = Mutex::new(&mut files);
-
 			loop {
 				// This little switcheroo allows us to push new directories
 				// straight into the original dirs collection.
 				let mut new = Vec::new();
 				std::mem::swap(&mut new, &mut dirs);
-				let d = Mutex::new(&mut dirs);
 
-				new.into_par_iter()
-					.for_each(|p|
-						if let Ok(rd) = std::fs::read_dir(p) {
-							for e in rd {
-								if let Some(e) = Entry::from_entry(e) {
-									if mutex!(s).insert(e.hash) {
-										if e.is_dir { mutex!(d).push(e.path); }
-										else if cb(&e.path) { mutex!(f).push(e.path); }
-									}
+				for p in new {
+					if let Ok(rd) = std::fs::read_dir(p) {
+						for e in rd {
+							if let Some(e) = Entry::from_entry(e) {
+								if seen.insert(e.hash) {
+									if e.is_dir { dirs.push(e.path); }
+									else if cb(&e.path) { files.push(e.path); }
 								}
 							}
 						}
-					);
+					}
+				}
 
 				if dirs.is_empty() { break; }
 			}
@@ -382,6 +351,20 @@ impl Dowser {
 		// Done!
 		files
 	}
+}
+
+
+
+/// # Is Singular Path?
+///
+/// Returns true if the type seems to be a singular `Path`/`PathBuf` object.
+fn is_singular_path<T>(raw: T) -> bool {
+	fn type_of<T>(_: T) -> &'static str {
+		std::any::type_name::<T>()
+	}
+
+	let kind = type_of(raw);
+	kind.ends_with("std::path::Path") || kind.ends_with("std::path::PathBuf")
 }
 
 
@@ -483,5 +466,49 @@ mod tests {
 		itered = Dowser::from(test_dir.as_path()).into_vec(|_| true);
 		itered.sort();
 		assert_eq!(canon, itered);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_with_paths1() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().with_paths(path);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_with_paths2() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().with_paths(&path.to_path_buf());
+	}
+
+	#[test]
+	fn t_with_paths3() {
+		let path: &Path = "/usr/bin".as_ref();
+		// These shouldn't panic.
+		let _res = Dowser::default().with_paths(&[path]);
+		let _res = Dowser::default().with_paths(&[path.to_path_buf()]);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_without_paths1() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().without_paths(path);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_without_paths2() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().without_paths(&path.to_path_buf());
+	}
+
+	#[test]
+	fn t_without_paths3() {
+		let path: &Path = "/usr/bin".as_ref();
+		// These shouldn't panic.
+		let _res = Dowser::default().without_paths(&[path]);
+		let _res = Dowser::default().without_paths(&[path.to_path_buf()]);
 	}
 }

@@ -4,7 +4,7 @@ version = "0.5.3"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.61"
-description = "A multi-threaded, recursive file finding library for Unix."
+description = "A recursive, canonicalizing file finding library for Unix."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/dowser"
 readme = "README.md"
@@ -32,7 +32,10 @@ credits-dir = "./"
 [dependencies]
 ahash = "=0.8.0"
 dactyl = "0.4.*"
-rayon = "=1.5.3"
+
+[dependencies.rayon]
+version = "=1.5.3"
+optional = true
 
 [dev-dependencies]
 brunch = "0.3.*"

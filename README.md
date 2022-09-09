@@ -7,7 +7,7 @@
 [![Dependency Status](https://deps.rs/repo/github/blobfolio/dowser/status.svg)](https://deps.rs/repo/github/blobfolio/dowser)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Blobfolio/dowser)
 
-`Dowser` is a(nother) fast, multi-threaded, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
+`Dowser` is a(nother) fast, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
 
 * It is not limited to one root; any number of file and directory paths can be loaded and traversed en masse;
 * Symlinks and hidden directories are followed like any other, including across devices;
@@ -29,15 +29,14 @@ Add `dowser` to your `dependencies` in `Cargo.toml`, like:
 
 ```
 [dependencies]
-dowser = "0.5.*"
+dowser = "0.6.*"
 ```
 
 
 
 ## Example
 
-All you need to do is chain `Dowser::default` with one or more of the
-following seed methods:
+All you need to do is chain `Dowser::default` with one or more of the following seed methods:
 
 * `Dowser::with_path` / `Dowser::with_paths`
 * `Dowser::without_path` / `Dowser::without_paths`
@@ -46,7 +45,6 @@ From there, you can use whatever `Iterator` methods you want.
 
 ```rust
 use dowser::Dowser;
-use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 
 // Return all files under "/usr/share/man".
@@ -60,7 +58,7 @@ let files: Vec::<PathBuf> = Dowser::default()
     .filter(|p|
         p.extension().map_or(
             false,
-            |e| e.as_bytes().eq_ignore_ascii_case(b"gz")
+            |e| e.eq_ignore_ascii_case("gz")
         )
     )
     .collect();

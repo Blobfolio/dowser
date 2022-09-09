@@ -2,6 +2,14 @@
 
 
 
+## [0.6.0](https://github.com/Blobfolio/dowser/releases/tag/v0.6.0) - TBD
+
+### Changed
+
+* Traversal is now fully serial. (Multi-threading came with too many gotchas and didn't improve performance much for most workloads.)
+
+
+
 ## [0.5.3](https://github.com/Blobfolio/dowser/releases/tag/v0.5.3) - 2022-08-11
 
 ### Changed

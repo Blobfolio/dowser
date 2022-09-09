@@ -32,27 +32,15 @@ bench BENCH="":
 	if [ -z "{{ BENCH }}" ]; then
 		cargo bench \
 			--benches \
-			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	else
 		cargo bench \
 			--bench "{{ BENCH }}" \
-			--all-features \
 			--target x86_64-unknown-linux-gnu \
 			--target-dir "{{ cargo_dir }}"
 	fi
 	exit 0
-
-
-# Check Release!
-@check:
-	# First let's build the Rust bit.
-	cargo check \
-		--release \
-		--target x86_64-unknown-linux-gnu \
-		--all-features \
-		--target-dir "{{ cargo_dir }}"
 
 
 # Clean Cargo crap.
@@ -72,7 +60,6 @@ bench BENCH="":
 	clear
 	cargo clippy \
 		--release \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
@@ -91,7 +78,6 @@ bench BENCH="":
 	# Make the docs.
 	cargo +nightly doc \
 		--release \
-		--all-features \
 		--no-deps \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
@@ -118,7 +104,6 @@ bench BENCH="":
 	clear
 	RUST_TEST_THREADS=1 cargo test \
 		--release \
-		--all-features \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 
