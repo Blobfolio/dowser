@@ -1,6 +1,7 @@
 # Dowser
 
 [![Documentation](https://docs.rs/dowser/badge.svg)](https://docs.rs/dowser/)
+[![Changelog](https://img.shields.io/crates/v/dowser.svg?label=Changelog&color=9cf)](https://github.com/Blobfolio/dowser/blob/master/CHANGELOG.md)
 [![crates.io](https://img.shields.io/crates/v/dowser.svg)](https://crates.io/crates/dowser)
 [![Build Status](https://github.com/Blobfolio/dowser/workflows/Build/badge.svg)](https://github.com/Blobfolio/dowser/actions)
 [![Dependency Status](https://deps.rs/repo/github/blobfolio/dowser/status.svg)](https://deps.rs/repo/github/blobfolio/dowser)

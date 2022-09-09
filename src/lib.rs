@@ -1,6 +1,11 @@
 /*!
 # Dowser
 
+[![Documentation](https://docs.rs/dowser/badge.svg)](https://docs.rs/dowser/)
+[![Changelog](https://img.shields.io/crates/v/dowser.svg?label=Changelog&color=9cf)](https://github.com/Blobfolio/dowser/blob/master/CHANGELOG.md)
+[![crates.io](https://img.shields.io/crates/v/dowser.svg)](https://crates.io/crates/dowser)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Blobfolio/dowser)
+
 [`Dowser`] is a(nother) fast, multi-threaded, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
 
 * It is not limited to one root; any number of file and directory paths can be loaded and traversed en masse;
