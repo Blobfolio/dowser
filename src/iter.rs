@@ -160,34 +160,6 @@ impl Iterator for Dowser {
 }
 
 impl Dowser {
-	#[inline]
-	#[must_use]
-	/// # With Paths.
-	///
-	/// Queue up multiple file and/or directory paths.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// let files: Vec::<PathBuf> = Dowser::default()
-	///     .with_paths(&["/my/dir"])
-	///     .collect();
-	/// ```
-	///
-	/// ## Panics
-	///
-	/// This will panic if you try to pass a single `Path` or `PathBuf` object
-	/// directly to this method (instead of a collection of same). Use
-	/// [`Dowser::with_path`] to add such an object directly.
-	pub fn with_paths<P, I>(self, paths: I) -> Self
-	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(! is_singular_path(&paths), "Dowser::with_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
-		paths.into_iter().fold(self, Self::with_path)
-	}
-
 	#[must_use]
 	/// # With Path.
 	///
@@ -216,6 +188,34 @@ impl Dowser {
 		}
 
 		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With Paths.
+	///
+	/// Queue up multiple file and/or directory paths.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files: Vec::<PathBuf> = Dowser::default()
+	///     .with_paths(&["/my/dir"])
+	///     .collect();
+	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic if you try to pass a single `Path` or `PathBuf` object
+	/// directly to this method (instead of a collection of same). Use
+	/// [`Dowser::with_path`] to add such an object directly.
+	pub fn with_paths<P, I>(self, paths: I) -> Self
+	where P: AsRef<Path>, I: IntoIterator<Item=P> {
+		assert!(! is_singular_path(&paths), "Dowser::with_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
+		paths.into_iter().fold(self, Self::with_path)
 	}
 }
 
@@ -389,9 +389,7 @@ impl Dowser {
 		let Self { mut files, mut dirs, mut seen } = self;
 
 		// We wouldn't have had a chance to filter these yet.
-		if ! files.is_empty() {
-			files.retain(|p| cb(p));
-		}
+		if ! files.is_empty() { files.retain(|p| cb(p)); }
 
 		if ! dirs.is_empty() {
 			loop {
