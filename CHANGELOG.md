@@ -2,6 +2,15 @@
 
 
 
+## [0.6.1](https://github.com/Blobfolio/dowser/releases/tag/v0.6.1) - 2022-09-09
+
+### Cleanup
+
+* Drop optional `rayon` from `Cargo.toml`
+* Drop unused `ahash` features
+
+
+
 ## [0.6.0](https://github.com/Blobfolio/dowser/releases/tag/v0.6.0) - 2022-09-09
 
 ### New
@@ -98,7 +107,6 @@ The file collision (uniqueness filters) have also been greatly improved, further
 ### Changed
 
 * `DirConcurrency::Single` now does all processing in serial
-
 
 
 

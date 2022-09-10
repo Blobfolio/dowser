@@ -31,12 +31,11 @@ man-dir = "./"
 credits-dir = "./"
 
 [dependencies]
-ahash = "=0.8.0"
 dactyl = "0.4.*"
 
-[dependencies.rayon]
-version = "=1.5.3"
-optional = true
+[dependencies.ahash]
+version = "=0.8.0"
+default-features = false
 
 [dev-dependencies]
 brunch = "0.3.*"
