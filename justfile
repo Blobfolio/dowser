@@ -79,6 +79,7 @@ bench BENCH="":
 	cargo +nightly doc \
 		--release \
 		--no-deps \
+		--features docsrs \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
 

@@ -184,7 +184,7 @@ impl Dowser {
 	/// [`Dowser::with_path`] to add such an object directly.
 	pub fn with_paths<P, I>(self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(! is_singular_path(&paths), "Dowser::with_paths cannot accept a single Path/PathBuf object; it requires a collection (even if it only has one entry).");
+		assert!(! is_singular_path(&paths), "Dowser::with_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
 		paths.into_iter().fold(self, Self::with_path)
 	}
 
@@ -278,7 +278,7 @@ impl Dowser {
 	/// [`Dowser::without_path`] to add such an object directly.
 	pub fn without_paths<P, I>(mut self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(! is_singular_path(&paths), "Dowser::without_paths cannot accept a single Path/PathBuf object; it requires a collection (even if it only has one entry).");
+		assert!(! is_singular_path(&paths), "Dowser::without_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
 
 		self.seen.extend(paths.into_iter().filter_map(|p|
 			std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
