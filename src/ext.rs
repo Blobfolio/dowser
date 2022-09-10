@@ -17,6 +17,7 @@ use std::{
 
 
 
+#[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
 #[derive(Debug, Clone, Copy)]
 /// # Extension.
 ///

@@ -4,10 +4,6 @@
 
 use crate::Entry;
 use dactyl::NoHash;
-use rayon::iter::{
-	IntoParallelIterator,
-	ParallelIterator,
-};
 use std::{
 	collections::HashSet,
 	ffi::OsStr,
@@ -15,24 +11,16 @@ use std::{
 		Path,
 		PathBuf,
 	},
-	sync::Mutex,
 };
-
-
-
-/// # Helper: Unlock Mutex.
-macro_rules! mutex {
-	($m:expr) => ($m.lock().unwrap_or_else(std::sync::PoisonError::into_inner));
-}
 
 
 
 #[derive(Debug, Clone)]
 /// # Dowser.
 ///
-/// `Dowser` is a very simple recursive file iterator with parallelized
-/// crawling for performance. Symlinks and hidden nodes are followed like any
-/// other, and all results are canonicalized and deduped prior to yielding.
+/// `Dowser` is a very simple recursive file iterator. Symlinks and hidden
+/// nodes are followed like any other, and all results are canonicalized and
+/// deduped prior to yielding.
 ///
 /// ## Usage
 ///
@@ -49,18 +37,8 @@ macro_rules! mutex {
 /// If using `without_*`, be sure to chain those _first_, before any `with_*`
 /// calls, just in case your withs and withouts overlap. ;)
 ///
-/// From there, just do your normal iterator business.
-///
-/// ## Gotchas
-///
-/// Because `Dowser` internally implements multi-threading, you should not try
-/// to do something like `Dowser::default().par_bridge()`; that will just make
-/// everything slower.
-///
-/// `Dowser` leaves some threads in reserve to help mitigate system caps like
-/// `ulimit`, but if the user running the program has a very low `ulimit` set,
-/// the results may be inconsistent from run to run. In such cases, please
-/// refer to your operating system's instructions for increasing the limit.
+/// From there, you can do your normal [`Iterator`](std::iter::Iterator) business, or if you just want to
+/// collect the results into a vector, call [`Dowser::into_vec`] or [`Dowser::into_vec_filtered`].
 ///
 /// ## Examples
 ///
@@ -70,8 +48,8 @@ macro_rules! mutex {
 ///
 /// let files: Vec<PathBuf> = Dowser::default()
 ///     .with_path("/usr/share")
-///     // You could filter_map(), etc., here. All paths returned are canonical,
-///     // valid files.
+///     // You could filter_map(), etc., here, with the understanding that
+///     // every path you get will belong to a valid, canonical file.
 ///     .collect();
 /// ```
 pub struct Dowser {
@@ -147,32 +125,20 @@ impl Iterator for Dowser {
 				return Some(p);
 			}
 
-			// Are we out of things to do?
-			if self.dirs.is_empty() { break; }
-
-			// Digest the directories we know about.
-			let s = Mutex::new(&mut self.seen);
-			let f = Mutex::new(&mut self.files);
-
-			// This little switcheroo allows us to push new directories
-			// straight into the original dirs collection.
-			let mut new = Vec::new();
-			std::mem::swap(&mut new, &mut self.dirs);
-			let d = Mutex::new(&mut self.dirs);
-
-			new.into_par_iter()
-				.for_each(|p|
-					if let Ok(rd) = std::fs::read_dir(p) {
-						for e in rd {
-							if let Some(e) = Entry::from_entry(e) {
-								if mutex!(s).insert(e.hash) {
-									if e.is_dir { mutex!(d).push(e.path); }
-									else { mutex!(f).push(e.path); }
-								}
+			if let Some(p) = self.dirs.pop() {
+				if let Ok(rd) = std::fs::read_dir(p) {
+					for e in rd {
+						if let Some(e) = Entry::from_entry(e) {
+							if self.seen.insert(e.hash) {
+								if e.is_dir { self.dirs.push(e.path); }
+								else { self.files.push(e.path); }
 							}
 						}
 					}
-				);
+				}
+			}
+			// We're out of things to do!
+			else { break; }
 		}
 
 		None
@@ -194,32 +160,6 @@ impl Iterator for Dowser {
 }
 
 impl Dowser {
-	#[inline]
-	#[must_use]
-	/// # With Paths.
-	///
-	/// Queue up multiple file and/or directory paths.
-	///
-	/// ## Warning
-	///
-	/// **Do not** pass a single `Path` or `PathBuf` to this method. If you
-	/// need to add just one path, use [`Dowser::with_path`] instead.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// let files: Vec::<PathBuf> = Dowser::default()
-	///     .with_paths(&["/my/dir"])
-	///     .collect();
-	/// ```
-	pub fn with_paths<P, I>(self, paths: I) -> Self
-	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		paths.into_iter().fold(self, Self::with_path)
-	}
-
 	#[must_use]
 	/// # With Path.
 	///
@@ -248,6 +188,34 @@ impl Dowser {
 		}
 
 		self
+	}
+
+	#[inline]
+	#[must_use]
+	/// # With Paths.
+	///
+	/// Queue up multiple file and/or directory paths.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files: Vec::<PathBuf> = Dowser::default()
+	///     .with_paths(&["/my/dir"])
+	///     .collect();
+	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic if you try to pass a single `Path` or `PathBuf` object
+	/// directly to this method (instead of a collection of same). Use
+	/// [`Dowser::with_path`] to add such an object directly.
+	pub fn with_paths<P, I>(self, paths: I) -> Self
+	where P: AsRef<Path>, I: IntoIterator<Item=P> {
+		assert!(! is_singular_path(&paths), "Dowser::with_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
+		paths.into_iter().fold(self, Self::with_path)
 	}
 }
 
@@ -302,8 +270,16 @@ impl Dowser {
 	///     .with_path("/my/dir")
 	///     .collect();
 	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic if you try to pass a single `Path` or `PathBuf` object
+	/// directly to this method (instead of a collection of same). Use
+	/// [`Dowser::without_path`] to add such an object directly.
 	pub fn without_paths<P, I>(mut self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
+		assert!(! is_singular_path(&paths), "Dowser::without_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
+
 		self.seen.extend(paths.into_iter().filter_map(|p|
 			std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
 		));
@@ -313,67 +289,52 @@ impl Dowser {
 
 impl Dowser {
 	#[must_use]
-	/// # Consume Into Vec (Filtered).
+	/// # Consume Into Vec.
 	///
 	/// This method is an optimized alternative to running
-	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
+	/// `Dowser.iter().collect::<Vec<PathBuf>>()`.
 	///
 	/// It yields the same results as the above, but makes fewer allocations
-	/// along the way, and executes the filter callback in parallel when
-	/// multiple directories are being traversed at once.
+	/// along the way.
 	///
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use dowser::{Dowser, Extension};
+	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
-	///
-	/// const GZ: Extension = Extension::new2(*b"gz");
 	///
 	/// // The iterator way.
 	/// let files: Vec<PathBuf> = Dowser::default()
 	///     .with_path("/usr/share")
-	///     .filter(|p| Some(GZ) == Extension::try_from2(p))
 	///     .collect();
 	///
 	/// // The optimized way.
 	/// let files: Vec<PathBuf> = Dowser::default()
 	///     .with_path("/usr/share")
-	///     .into_vec(|p| Some(GZ) == Extension::try_from2(p));
+	///     .into_vec();
 	/// ```
-	pub fn into_vec<F>(self, cb: F) -> Vec<PathBuf>
-	where F: Fn(&Path) -> bool + Sync + Send {
+	pub fn into_vec(self) -> Vec<PathBuf> {
 		let Self { mut files, mut dirs, mut seen } = self;
 
-		// We wouldn't have had a chance to filter these yet.
-		if ! files.is_empty() {
-			files.retain(|p| cb(p));
-		}
-
 		if ! dirs.is_empty() {
-			let s = Mutex::new(&mut seen);
-			let f = Mutex::new(&mut files);
-
 			loop {
 				// This little switcheroo allows us to push new directories
 				// straight into the original dirs collection.
 				let mut new = Vec::new();
 				std::mem::swap(&mut new, &mut dirs);
-				let d = Mutex::new(&mut dirs);
 
-				new.into_par_iter()
-					.for_each(|p|
-						if let Ok(rd) = std::fs::read_dir(p) {
-							for e in rd {
-								if let Some(e) = Entry::from_entry(e) {
-									if mutex!(s).insert(e.hash) {
-										if e.is_dir { mutex!(d).push(e.path); }
-										else if cb(&e.path) { mutex!(f).push(e.path); }
-									}
+				for p in new {
+					if let Ok(rd) = std::fs::read_dir(p) {
+						for e in rd {
+							if let Some(e) = Entry::from_entry(e) {
+								if seen.insert(e.hash) {
+									if e.is_dir { dirs.push(e.path); }
+									else { files.push(e.path); }
 								}
 							}
 						}
-					);
+					}
+				}
 
 				if dirs.is_empty() { break; }
 			}
@@ -382,6 +343,96 @@ impl Dowser {
 		// Done!
 		files
 	}
+
+	#[must_use]
+	/// # Consume Into Vec (Filtered).
+	///
+	/// This method is an optimized alternative to running
+	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
+	///
+	/// It yields the same results as the above, but makes fewer allocations
+	/// along the way.
+	///
+	/// Note: every entry passed to your callback will be a valid, canonical
+	/// file path. (You don't have to explicitly test for [`is_file`](std::path::Path::is_file) or
+	/// anything like that.)
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// // The iterator way.
+	/// let files: Vec<PathBuf> = Dowser::default()
+	///     .with_path("/usr/share")
+	///     .filter(|p|
+	///         p.extension().map_or(
+    ///             false,
+    ///             |e| e.eq_ignore_ascii_case("jpg")
+    ///         )
+	///     )
+	///     .collect();
+	///
+	/// // The optimized way.
+	/// let files: Vec<PathBuf> = Dowser::default()
+	///     .with_path("/usr/share")
+	///     .into_vec_filtered(|p|
+	///         p.extension().map_or(
+    ///             false,
+    ///             |e| e.eq_ignore_ascii_case("jpg")
+    ///         )
+	///     );
+	/// ```
+	pub fn into_vec_filtered<F>(self, cb: F) -> Vec<PathBuf>
+	where F: Fn(&Path) -> bool + Sync + Send {
+		let Self { mut files, mut dirs, mut seen } = self;
+
+		// We wouldn't have had a chance to filter these yet.
+		if ! files.is_empty() { files.retain(|p| cb(p)); }
+
+		if ! dirs.is_empty() {
+			loop {
+				// This little switcheroo allows us to push new directories
+				// straight into the original dirs collection.
+				let mut new = Vec::new();
+				std::mem::swap(&mut new, &mut dirs);
+
+				for p in new {
+					if let Ok(rd) = std::fs::read_dir(p) {
+						for e in rd {
+							if let Some(e) = Entry::from_entry(e) {
+								if seen.insert(e.hash) {
+									if e.is_dir { dirs.push(e.path); }
+									else if cb(&e.path) { files.push(e.path); }
+								}
+							}
+						}
+					}
+				}
+
+				if dirs.is_empty() { break; }
+			}
+		}
+
+		// Done!
+		files
+	}
+}
+
+
+
+/// # Is Singular Path?
+///
+/// Returns true if the type seems to be a singular `Path`/`PathBuf` object.
+/// This is necessary to differentiate them from proper collections
+/// implementing `IntoIterator<AsRef<Path>>`, at least until negative trait
+/// bounds are stabilized.
+fn is_singular_path<T>(raw: T) -> bool {
+	fn type_of<T>(_: T) -> &'static str { std::any::type_name::<T>() }
+
+	let kind = type_of(raw).trim_start_matches('&');
+	kind == "std::path::Path" || kind == "std::path::PathBuf"
 }
 
 
@@ -480,8 +531,52 @@ mod tests {
 		itered.sort();
 		assert_eq!(canon, itered);
 
-		itered = Dowser::from(test_dir.as_path()).into_vec(|_| true);
+		itered = Dowser::from(test_dir.as_path()).into_vec_filtered(|_| true);
 		itered.sort();
 		assert_eq!(canon, itered);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_with_paths1() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().with_paths(path);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_with_paths2() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().with_paths(&path.to_path_buf());
+	}
+
+	#[test]
+	fn t_with_paths3() {
+		let path: &Path = "/usr/bin".as_ref();
+		// These shouldn't panic.
+		let _res = Dowser::default().with_paths(&[path]);
+		let _res = Dowser::default().with_paths(&[path.to_path_buf()]);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_without_paths1() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().without_paths(path);
+	}
+
+	#[test]
+	#[should_panic]
+	fn t_without_paths2() {
+		let path: &Path = "/usr/bin".as_ref();
+		let _res = Dowser::default().without_paths(&path.to_path_buf());
+	}
+
+	#[test]
+	fn t_without_paths3() {
+		let path: &Path = "/usr/bin".as_ref();
+		// These shouldn't panic.
+		let _res = Dowser::default().without_paths(&[path]);
+		let _res = Dowser::default().without_paths(&[path.to_path_buf()]);
 	}
 }

@@ -1,10 +1,10 @@
 [package]
 name = "dowser"
-version = "0.5.3"
+version = "0.6.0"
 authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.61"
-description = "A multi-threaded, recursive file finding library for Unix."
+description = "A recursive, canonicalizing file finding library for Unix."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/dowser"
 readme = "README.md"
@@ -20,6 +20,7 @@ exclude = [
 ]
 
 [package.metadata.docs.rs]
+features = [ "docsrs" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
@@ -32,10 +33,19 @@ credits-dir = "./"
 [dependencies]
 ahash = "=0.8.0"
 dactyl = "0.4.*"
-rayon = "=1.5.3"
+
+[dependencies.rayon]
+version = "=1.5.3"
+optional = true
 
 [dev-dependencies]
-brunch = "0.2.*, >=0.2.4"
+brunch = "0.3.*"
+
+[features]
+default = []
+
+# This is just a workaround for Docs.rs; don't enable this if you're a human!
+docsrs = []
 
 [[bench]]
 name = "dowser"
