@@ -2,10 +2,14 @@
 # Dowser: Utility Methods.
 */
 
-use std::path::Path;
+use std::{
+	os::unix::ffi::OsStrExt,
+	path::Path,
+};
 
 
 
+#[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
 #[must_use]
 #[inline]
 /// # Path to Bytes.
@@ -19,6 +23,5 @@ use std::path::Path;
 /// let path = dowser::utility::path_as_bytes(&PathBuf::from("/path/to/file.jpg"));
 /// ```
 pub fn path_as_bytes(p: &Path) -> &[u8] {
-	use std::os::unix::ffi::OsStrExt;
 	p.as_os_str().as_bytes()
 }

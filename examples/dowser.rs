@@ -2,17 +2,18 @@
 # Dowser: Filtered Find
 */
 
-use dowser::{
-	Dowser,
-	Extension,
-};
-use std::{
-	path::PathBuf,
-	time::Instant,
-};
-
-/// Do it.
+#[cfg(unix)]
+/// # Do it.
 fn main() {
+	use dowser::{
+		Dowser,
+		Extension,
+	};
+	use std::{
+		path::PathBuf,
+		time::Instant,
+	};
+
 	const EXT: Extension = Extension::new2(*b"gz");
 
 	// Search for gzipped MAN pages.
@@ -30,4 +31,10 @@ fn main() {
 	else {
 		println!("There are {} .gz files in /usr/share/.", files.len());
 	}
+}
+
+#[cfg(not(unix))]
+/// # Don't Do It.
+fn main() {
+	println!("This example is only for unix.");
 }

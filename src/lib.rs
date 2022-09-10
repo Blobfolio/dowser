@@ -14,11 +14,7 @@
 
 If those things sound nice, this library might be a good fit.
 
-On the other hand, [`Dowser`] is optimized for _file_ searching; the iterator crawls but does not yield directory paths.
-
-Additionally, path deduping relies on Unix metadata; **this library is not compatible with Windows**;
-
-Depending on your needs, those limitations could be bad, in which case something like [`Walkdir`](https://crates.io/crates/walkdir) would make more sense.
+On the other hand, [`Dowser`] is optimized for _file_ searching; the iterator crawls but does not yield directory paths, which could be bad if you need those too. Haha.
 
 
 
@@ -107,17 +103,27 @@ assert_eq!(files1.len(), files2.len());
 	unused_extern_crates,
 	unused_import_braces,
 )]
+
 #![allow(clippy::module_name_repetitions)] // This is fine.
 
+#![cfg_attr(feature = "docsrs", feature(doc_cfg))]
 
 
-mod ext;
+
 mod entry;
 mod iter;
+
+#[cfg(unix)] mod ext;
+
+#[cfg(unix)]
+#[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
 pub mod utility;
 
 
 
 pub(crate) use entry::Entry;
-pub use ext::Extension;
 pub use iter::Dowser;
+
+#[cfg(unix)]
+#[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
+pub use ext::Extension;

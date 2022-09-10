@@ -7,7 +7,6 @@ use std::{
 	fs::DirEntry,
 	hash::Hasher,
 	io::Result,
-	os::unix::ffi::OsStrExt,
 	path::{
 		Path,
 		PathBuf,
@@ -64,14 +63,29 @@ impl Entry {
 		Some(Self { path, is_dir, hash })
 	}
 
+	#[cfg(unix)]
 	#[must_use]
 	/// # Hash Path.
 	///
 	/// Since all paths are canonical, we can test for uniqueness by simply
 	/// hashing them.
 	pub(super) fn hash_path(path: &Path) -> u64 {
+		use std::os::unix::ffi::OsStrExt;
 		let mut hasher = AHasher::default();
 		hasher.write(path.as_os_str().as_bytes());
+		hasher.finish()
+	}
+
+	#[cfg(not(unix))]
+	#[must_use]
+	/// # Hash Path.
+	///
+	/// Since all paths are canonical, we can test for uniqueness by simply
+	/// hashing them.
+	pub(super) fn hash_path(path: &Path) -> u64 {
+		use std::hash::Hash;
+		let mut hasher = AHasher::default();
+		path.hash(&mut hasher);
 		hasher.finish()
 	}
 }

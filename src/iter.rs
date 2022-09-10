@@ -360,21 +360,29 @@ impl Dowser {
 	/// ## Examples
 	///
 	/// ```no_run
-	/// use dowser::{Dowser, Extension};
+	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
-	///
-	/// const GZ: Extension = Extension::new2(*b"gz");
 	///
 	/// // The iterator way.
 	/// let files: Vec<PathBuf> = Dowser::default()
 	///     .with_path("/usr/share")
-	///     .filter(|p| Some(GZ) == Extension::try_from2(p))
+	///     .filter(|p|
+	///         p.extension().map_or(
+    ///             false,
+    ///             |e| e.eq_ignore_ascii_case("jpg")
+    ///         )
+	///     )
 	///     .collect();
 	///
 	/// // The optimized way.
 	/// let files: Vec<PathBuf> = Dowser::default()
 	///     .with_path("/usr/share")
-	///     .into_vec_filtered(|p| Some(GZ) == Extension::try_from2(p));
+	///     .into_vec_filtered(|p|
+	///         p.extension().map_or(
+    ///             false,
+    ///             |e| e.eq_ignore_ascii_case("jpg")
+    ///         )
+	///     );
 	/// ```
 	pub fn into_vec_filtered<F>(self, cb: F) -> Vec<PathBuf>
 	where F: Fn(&Path) -> bool + Sync + Send {

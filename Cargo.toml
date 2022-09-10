@@ -20,6 +20,7 @@ exclude = [
 ]
 
 [package.metadata.docs.rs]
+features = [ "docsrs" ]
 default-target = "x86_64-unknown-linux-gnu"
 targets = [ "x86_64-unknown-linux-gnu", "x86_64-apple-darwin" ]
 
@@ -39,6 +40,12 @@ optional = true
 
 [dev-dependencies]
 brunch = "0.3.*"
+
+[features]
+default = []
+
+# This is just a workaround for Docs.rs; don't enable this if you're a human!
+docsrs = []
 
 [[bench]]
 name = "dowser"
