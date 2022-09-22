@@ -2,6 +2,15 @@
 
 
 
+## [0.6.2](https://github.com/Blobfolio/dowser/releases/tag/v0.6.2) - 2022-09-22
+
+### Changed
+
+* Bump MSRV `1.63`
+* Improved docs
+
+
+
 ## [0.6.1](https://github.com/Blobfolio/dowser/releases/tag/v0.6.1) - 2022-09-09
 
 ### Cleanup
