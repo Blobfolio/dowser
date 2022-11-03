@@ -2,6 +2,14 @@
 
 
 
+## [0.6.3](https://github.com/Blobfolio/dowser/releases/tag/v0.6.3) - 2022-11-03
+
+### Changed
+
+* Relax `ahash` version requirements
+
+
+
 ## [0.6.2](https://github.com/Blobfolio/dowser/releases/tag/v0.6.2) - 2022-09-22
 
 ### Changed
