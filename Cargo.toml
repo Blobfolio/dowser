@@ -34,7 +34,7 @@ credits-dir = "./"
 dactyl = "0.4.*"
 
 [dependencies.ahash]
-version = "=0.8.0"
+version = "0.8.*"
 default-features = false
 
 [dev-dependencies]
