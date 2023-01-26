@@ -38,7 +38,7 @@ version = "0.8.*"
 default-features = false
 
 [dev-dependencies]
-brunch = "0.3.*"
+brunch = "0.4.*"
 
 [features]
 default = []
