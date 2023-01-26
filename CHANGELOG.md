@@ -2,6 +2,15 @@
 
 
 
+## [0.6.4](https://github.com/Blobfolio/dowser/releases/tag/v0.6.4) - 2023-01-26
+
+### Changed
+
+* Bump brunch `0.4`
+* Fix ci badge (docs)
+
+
+
 ## [0.6.3](https://github.com/Blobfolio/dowser/releases/tag/v0.6.3) - 2022-11-03
 
 ### Changed
