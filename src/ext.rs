@@ -102,7 +102,7 @@ macro_rules! path_slice {
 /// PNGs — you would do something like:
 ///
 /// ```no_run
-/// use std::os::unix::ffi::OsStrExt;
+/// use std::ffi::OsStr;
 /// use std::path::PathBuf;
 ///
 /// // Imagine this is much longer…
@@ -110,7 +110,7 @@ macro_rules! path_slice {
 ///
 /// paths.iter()
 ///     .filter(|p| p.extension()
-///         .map_or(false, |e| e.as_bytes().eq_ignore_ascii_case(b"png"))
+///         .map_or(false, |e| e.eq_ignore_ascii_case(OsStr::new("png")))
 ///     )
 ///     .for_each(|p| todo!());
 /// ```
