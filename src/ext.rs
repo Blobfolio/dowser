@@ -11,13 +11,33 @@ use std::{
 		Hash,
 		Hasher,
 	},
-	os::unix::ffi::OsStrExt,
 	path::Path,
 };
 
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
 
 
-#[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
+
+#[cfg(unix)]
+/// # Path to Bytes.
+///
+/// Convert a path to a slice.
+macro_rules! path_slice {
+	($path:ident) => ($path.as_ref().as_os_str().as_bytes());
+}
+
+#[cfg(not(unix))]
+/// # Path to Bytes.
+///
+/// Convert a path to a slice. On Windows this may not be strictly correct,
+/// but hopefully good enough to match an extension.
+macro_rules! path_slice {
+	($path:ident) => ($path.as_ref().to_string_lossy().as_bytes());
+}
+
+
+
 #[derive(Debug, Clone, Copy)]
 /// # Extension.
 ///
@@ -82,7 +102,7 @@ use std::{
 /// PNGs — you would do something like:
 ///
 /// ```no_run
-/// use std::os::unix::ffi::OsStrExt;
+/// use std::ffi::OsStr;
 /// use std::path::PathBuf;
 ///
 /// // Imagine this is much longer…
@@ -90,7 +110,7 @@ use std::{
 ///
 /// paths.iter()
 ///     .filter(|p| p.extension()
-///         .map_or(false, |e| e.as_bytes().eq_ignore_ascii_case(b"png"))
+///         .map_or(false, |e| e.eq_ignore_ascii_case(OsStr::new("png")))
 ///     )
 ///     .for_each(|p| todo!());
 /// ```
@@ -116,13 +136,15 @@ pub enum Extension {
 	///
 	/// Like `.gz`.
 	Ext2(u16),
+
 	/// # 3-char Extension.
 	///
 	/// Like `.png`.
 	Ext3(u32),
+
 	/// # 4-char Extension.
 	///
-	/// Like `.jpeg`.
+	/// Like `.html`.
 	Ext4(u32),
 }
 
@@ -272,16 +294,7 @@ impl Extension {
 	/// ```
 	pub fn try_from2<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
-		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
-		let len: usize = bytes.len();
-
-		if 3 < len && b'.' == bytes[len - 3] && valid_pre_dot(bytes[len - 4]) {
-			Some(Self::Ext2(u16::from_le_bytes([
-				bytes[len - 2].to_ascii_lowercase(),
-				bytes[len - 1].to_ascii_lowercase(),
-			])))
-		}
-		else { None }
+		Self::slice_ext2(path_slice!(path))
 	}
 
 	#[must_use]
@@ -309,18 +322,7 @@ impl Extension {
 	/// ```
 	pub fn try_from3<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
-		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
-		let len: usize = bytes.len();
-
-		if 4 < len && b'.' == bytes[len - 4] && valid_pre_dot(bytes[len - 5]) {
-			Some(Self::Ext3(u32::from_le_bytes([
-				b'.',
-				bytes[len - 3].to_ascii_lowercase(),
-				bytes[len - 2].to_ascii_lowercase(),
-				bytes[len - 1].to_ascii_lowercase(),
-			])))
-		}
-		else { None }
+		Self::slice_ext3(path_slice!(path))
 	}
 
 	#[must_use]
@@ -348,16 +350,126 @@ impl Extension {
 	/// ```
 	pub fn try_from4<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
-		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
-		let len: usize = bytes.len();
+		Self::slice_ext4(path_slice!(path))
+	}
+}
 
-		if 5 < len && b'.' == bytes[len - 5] && valid_pre_dot(bytes[len - 6]) {
-			Some(Self::Ext4(u32::from_le_bytes([
-				bytes[len - 4].to_ascii_lowercase(),
-				bytes[len - 3].to_ascii_lowercase(),
-				bytes[len - 2].to_ascii_lowercase(),
-				bytes[len - 1].to_ascii_lowercase(),
-			])))
+/// # From Slices.
+impl Extension {
+	#[inline]
+	#[must_use]
+	/// # Extension Slice (2).
+	///
+	/// This method is used to (try to) pull a 2-byte extension from a file
+	/// path in slice form. This requires that the path be at least 4 bytes,
+	/// with anything but a forward/backward slash at `[len - 4]` and a dot at
+	/// `[len - 3]`.
+	///
+	/// If successful, it will return an [`Extension::Ext2`] that can be
+	/// compared against your reference [`Extension`]. Casing will be fixed
+	/// automatically.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// const MY_EXT: Extension = Extension::new2(*b"gz");
+	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.gz"), Some(MY_EXT));
+	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.GZ"), Some(MY_EXT));
+	///
+	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.png"), None);
+	/// assert_ne!(Extension::slice_ext2(b"/path/to/file.br"), Some(MY_EXT));
+	/// ```
+	pub const fn slice_ext2(path: &[u8]) -> Option<Self> {
+		if let [.., x, b'.', a, b] = path {
+			if valid_pre_dot(*x) {
+				Some(Self::Ext2(u16::from_le_bytes([
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+				])))
+			}
+			else { None }
+		}
+		else { None }
+	}
+
+	#[inline]
+	#[must_use]
+	/// # Extension Slice (3).
+	///
+	/// This method is used to (try to) pull a 3-byte extension from a file
+	/// path in slice form. This requires that the path be at least 5 bytes,
+	/// with anything but a forward/backward slash at `[len - 5]` and a dot at
+	/// `[len - 4]`.
+	///
+	/// If successful, it will return an [`Extension::Ext3`] that can be
+	/// compared against your reference [`Extension`]. Casing will be fixed
+	/// automatically.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// const MY_EXT: Extension = Extension::new3(*b"png");
+	/// assert_eq!(Extension::slice_ext3(b"/path/to/file.png"), Some(MY_EXT));
+	/// assert_eq!(Extension::slice_ext3(b"/path/to/FILE.PNG"), Some(MY_EXT));
+	///
+	/// assert_eq!(Extension::slice_ext3(b"/path/to/file.html"), None);
+	/// assert_ne!(Extension::slice_ext3(b"/path/to/file.jpg"), Some(MY_EXT));
+	/// ```
+	pub const fn slice_ext3(path: &[u8]) -> Option<Self> {
+		if let [.., x, b'.', a, b, c] = path {
+			if valid_pre_dot(*x) {
+				Some(Self::Ext3(u32::from_le_bytes([
+					b'.',
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+					c.to_ascii_lowercase(),
+				])))
+			}
+			else { None }
+		}
+		else { None }
+	}
+
+	#[inline]
+	#[must_use]
+	/// # Extension Slice (4).
+	///
+	/// This method is used to (try to) pull a 4-byte extension from a file
+	/// path in slice form. This requires that the path be at least 6 bytes,
+	/// with anything but a forward/backward slash at `[len - 6]` and a dot at
+	/// `[len - 5]`.
+	///
+	/// If successful, it will return an [`Extension::Ext4`] that can be
+	/// compared against your reference [`Extension`]. Casing will be fixed
+	/// automatically.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// const MY_EXT: Extension = Extension::new4(*b"html");
+	/// assert_eq!(Extension::slice_ext4(b"/path/to/file.html"), Some(MY_EXT));
+	/// assert_eq!(Extension::slice_ext4(b"/path/to/FILE.HTML"), Some(MY_EXT));
+	///
+	/// assert_eq!(Extension::slice_ext4(b"/path/to/file.png"), None);
+	/// assert_ne!(Extension::slice_ext4(b"/path/to/file.xhtm"), Some(MY_EXT));
+	/// ```
+	pub const fn slice_ext4(path: &[u8]) -> Option<Self> {
+		if let [.., x, b'.', a, b, c, d] = path {
+			if valid_pre_dot(*x) {
+				Some(Self::Ext4(u32::from_le_bytes([
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+					c.to_ascii_lowercase(),
+					d.to_ascii_lowercase(),
+				])))
+			}
+			else { None }
 		}
 		else { None }
 	}

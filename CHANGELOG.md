@@ -2,6 +2,24 @@
 
 
 
+## [0.7.0](https://github.com/Blobfolio/dowser/releases/tag/v0.7.0) - 2023-01-27
+
+### New
+
+* `Extension::slice_ext2`
+* `Extension::slice_ext3`
+* `Extension::slice_ext4`
+
+### Changed
+
+* `Extension` is now exposed for non-Unix targets
+
+### Removed
+
+* `utility::path_as_bytes`
+
+
+
 ## [0.6.4](https://github.com/Blobfolio/dowser/releases/tag/v0.6.4) - 2023-01-26
 
 ### Changed
