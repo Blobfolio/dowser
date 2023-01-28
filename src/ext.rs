@@ -136,13 +136,15 @@ pub enum Extension {
 	///
 	/// Like `.gz`.
 	Ext2(u16),
+
 	/// # 3-char Extension.
 	///
 	/// Like `.png`.
 	Ext3(u32),
+
 	/// # 4-char Extension.
 	///
-	/// Like `.jpeg`.
+	/// Like `.html`.
 	Ext4(u32),
 }
 
