@@ -109,8 +109,6 @@ assert_eq!(files1.len(), files2.len());
 
 #![allow(clippy::module_name_repetitions)] // This is fine.
 
-#![cfg_attr(feature = "docsrs", feature(doc_cfg))]
-
 
 
 mod entry;
