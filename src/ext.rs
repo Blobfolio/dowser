@@ -272,14 +272,13 @@ impl Extension {
 	/// ```
 	pub fn try_from2<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
-		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
-		let len: usize = bytes.len();
-
-		if 3 < len && b'.' == bytes[len - 3] && valid_pre_dot(bytes[len - 4]) {
-			Some(Self::Ext2(u16::from_le_bytes([
-				bytes[len - 2].to_ascii_lowercase(),
-				bytes[len - 1].to_ascii_lowercase(),
-			])))
+		if let [.., x, b'.', a, b] = path.as_ref().as_os_str().as_bytes() {
+			valid_pre_dot(*x).then(||
+				Self::Ext2(u16::from_le_bytes([
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+				]))
+			)
 		}
 		else { None }
 	}
@@ -309,16 +308,15 @@ impl Extension {
 	/// ```
 	pub fn try_from3<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
-		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
-		let len: usize = bytes.len();
-
-		if 4 < len && b'.' == bytes[len - 4] && valid_pre_dot(bytes[len - 5]) {
-			Some(Self::Ext3(u32::from_le_bytes([
-				b'.',
-				bytes[len - 3].to_ascii_lowercase(),
-				bytes[len - 2].to_ascii_lowercase(),
-				bytes[len - 1].to_ascii_lowercase(),
-			])))
+		if let [.., x, b'.', a, b, c] = path.as_ref().as_os_str().as_bytes() {
+			valid_pre_dot(*x).then(||
+				Self::Ext3(u32::from_le_bytes([
+					b'.',
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+					c.to_ascii_lowercase(),
+				]))
+			)
 		}
 		else { None }
 	}
@@ -348,16 +346,15 @@ impl Extension {
 	/// ```
 	pub fn try_from4<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
-		let bytes: &[u8] = path.as_ref().as_os_str().as_bytes();
-		let len: usize = bytes.len();
-
-		if 5 < len && b'.' == bytes[len - 5] && valid_pre_dot(bytes[len - 6]) {
-			Some(Self::Ext4(u32::from_le_bytes([
-				bytes[len - 4].to_ascii_lowercase(),
-				bytes[len - 3].to_ascii_lowercase(),
-				bytes[len - 2].to_ascii_lowercase(),
-				bytes[len - 1].to_ascii_lowercase(),
-			])))
+		if let [.., x, b'.', a, b, c, d] = path.as_ref().as_os_str().as_bytes() {
+			valid_pre_dot(*x).then(||
+				Self::Ext4(u32::from_le_bytes([
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+					c.to_ascii_lowercase(),
+					d.to_ascii_lowercase(),
+				]))
+			)
 		}
 		else { None }
 	}
