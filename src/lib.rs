@@ -114,9 +114,8 @@ assert_eq!(files1.len(), files2.len());
 
 
 mod entry;
+mod ext;
 mod iter;
-
-#[cfg(unix)] mod ext;
 
 #[cfg(unix)]
 #[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
@@ -125,8 +124,5 @@ pub mod utility;
 
 
 pub(crate) use entry::Entry;
-pub use iter::Dowser;
-
-#[cfg(unix)]
-#[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
 pub use ext::Extension;
+pub use iter::Dowser;

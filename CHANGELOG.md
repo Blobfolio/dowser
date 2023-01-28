@@ -2,6 +2,20 @@
 
 
 
+## [0.6.5](https://github.com/Blobfolio/dowser/releases/tag/v0.6.5) - TBD
+
+### New
+
+* `Extension::slice_ext2`
+* `Extension::slice_ext3`
+* `Extension::slice_ext4`
+
+### Changed
+
+* `Extension` is now exposed for non-Unix targets
+
+
+
 ## [0.6.4](https://github.com/Blobfolio/dowser/releases/tag/v0.6.4) - 2023-01-26
 
 ### Changed
