@@ -117,12 +117,6 @@ mod entry;
 mod ext;
 mod iter;
 
-#[cfg(unix)]
-#[cfg_attr(feature = "docsrs", doc(cfg(unix)))]
-pub mod utility;
-
-
-
 pub(crate) use entry::Entry;
 pub use ext::Extension;
 pub use iter::Dowser;
