@@ -2,7 +2,7 @@
 
 
 
-## [0.6.5](https://github.com/Blobfolio/dowser/releases/tag/v0.6.5) - TBD
+## [0.7.0](https://github.com/Blobfolio/dowser/releases/tag/v0.7.0) - 2023-01-27
 
 ### New
 
@@ -13,6 +13,10 @@
 ### Changed
 
 * `Extension` is now exposed for non-Unix targets
+
+### Removed
+
+* `utility::path_as_bytes`
 
 
 
