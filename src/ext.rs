@@ -378,18 +378,18 @@ impl Extension {
 	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.gz"), Some(MY_EXT));
 	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.GZ"), Some(MY_EXT));
 	///
+	/// // Non-matches.
+	/// assert_eq!(Extension::slice_ext2(b"/path/to/.gz"), None);
+	/// assert_eq!(Extension::slice_ext2(b"/path/to\\.gz"), None);
 	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.png"), None);
 	/// assert_ne!(Extension::slice_ext2(b"/path/to/file.br"), Some(MY_EXT));
 	/// ```
 	pub const fn slice_ext2(path: &[u8]) -> Option<Self> {
-		if let [.., x, b'.', a, b] = path {
-			if valid_pre_dot(*x) {
-				Some(Self::Ext2(u16::from_le_bytes([
-					a.to_ascii_lowercase(),
-					b.to_ascii_lowercase(),
-				])))
-			}
-			else { None }
+		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b] = path {
+			Some(Self::Ext2(u16::from_le_bytes([
+				a.to_ascii_lowercase(),
+				b.to_ascii_lowercase(),
+			])))
 		}
 		else { None }
 	}
@@ -416,20 +416,20 @@ impl Extension {
 	/// assert_eq!(Extension::slice_ext3(b"/path/to/file.png"), Some(MY_EXT));
 	/// assert_eq!(Extension::slice_ext3(b"/path/to/FILE.PNG"), Some(MY_EXT));
 	///
+	/// // Non-matches.
+	/// assert_eq!(Extension::slice_ext3(b"/path/to/.png"), None);
+	/// assert_eq!(Extension::slice_ext3(b"/path/to\\.png"), None);
 	/// assert_eq!(Extension::slice_ext3(b"/path/to/file.html"), None);
 	/// assert_ne!(Extension::slice_ext3(b"/path/to/file.jpg"), Some(MY_EXT));
 	/// ```
 	pub const fn slice_ext3(path: &[u8]) -> Option<Self> {
-		if let [.., x, b'.', a, b, c] = path {
-			if valid_pre_dot(*x) {
-				Some(Self::Ext3(u32::from_le_bytes([
-					b'.',
-					a.to_ascii_lowercase(),
-					b.to_ascii_lowercase(),
-					c.to_ascii_lowercase(),
-				])))
-			}
-			else { None }
+		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c] = path {
+			Some(Self::Ext3(u32::from_le_bytes([
+				b'.',
+				a.to_ascii_lowercase(),
+				b.to_ascii_lowercase(),
+				c.to_ascii_lowercase(),
+			])))
 		}
 		else { None }
 	}
@@ -456,20 +456,20 @@ impl Extension {
 	/// assert_eq!(Extension::slice_ext4(b"/path/to/file.html"), Some(MY_EXT));
 	/// assert_eq!(Extension::slice_ext4(b"/path/to/FILE.HTML"), Some(MY_EXT));
 	///
+	/// // Non-matches.
+	/// assert_eq!(Extension::slice_ext2(b"/path/to/.html"), None);
+	/// assert_eq!(Extension::slice_ext2(b"/path/to\\.html"), None);
 	/// assert_eq!(Extension::slice_ext4(b"/path/to/file.png"), None);
 	/// assert_ne!(Extension::slice_ext4(b"/path/to/file.xhtm"), Some(MY_EXT));
 	/// ```
 	pub const fn slice_ext4(path: &[u8]) -> Option<Self> {
-		if let [.., x, b'.', a, b, c, d] = path {
-			if valid_pre_dot(*x) {
-				Some(Self::Ext4(u32::from_le_bytes([
-					a.to_ascii_lowercase(),
-					b.to_ascii_lowercase(),
-					c.to_ascii_lowercase(),
-					d.to_ascii_lowercase(),
-				])))
-			}
-			else { None }
+		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c, d] = path {
+			Some(Self::Ext4(u32::from_le_bytes([
+				a.to_ascii_lowercase(),
+				b.to_ascii_lowercase(),
+				c.to_ascii_lowercase(),
+				d.to_ascii_lowercase(),
+			])))
 		}
 		else { None }
 	}
@@ -508,7 +508,7 @@ impl Extension {
 	///
 	/// // These are all bad, though:
 	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/.htaccess"),
+	///     Extension::slice_ext(b"/path/to/.hide"),
 	///     None
 	/// );
 	/// assert_eq!(
@@ -528,7 +528,7 @@ impl Extension {
 			dot + 1 < src.len() &&
 			src[dot] == b'.' &&
 			// Safety: we tested 0 < dot, so the subtraction won't overflow.
-			valid_pre_dot(unsafe { *(src.get_unchecked(dot - 1)) })
+			! matches!(unsafe { *(src.get_unchecked(dot - 1)) }, b'/' | b'\\')
 		{
 			Some(&src[dot + 1..])
 		}
@@ -664,14 +664,6 @@ impl Extension {
 		}
 	}
 }
-
-
-
-#[inline]
-/// # Valid Pre-Dot Character.
-///
-/// This simply checks that a byte is not a path separator.
-const fn valid_pre_dot(b: u8) -> bool { ! matches!(b, b'/' | b'\\') }
 
 
 
