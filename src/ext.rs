@@ -474,7 +474,6 @@ impl Extension {
 		else { None }
 	}
 
-	#[allow(unsafe_code)]
 	#[must_use]
 	/// # Slice Extension.
 	///
@@ -528,7 +527,7 @@ impl Extension {
 			dot + 1 < src.len() &&
 			src[dot] == b'.' &&
 			// Safety: we tested 0 < dot, so the subtraction won't overflow.
-			! matches!(unsafe { *(src.get_unchecked(dot - 1)) }, b'/' | b'\\')
+			! matches!(src[dot - 1], b'/' | b'\\')
 		{
 			Some(&src[dot + 1..])
 		}
