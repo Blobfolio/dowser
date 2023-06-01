@@ -29,7 +29,7 @@ man-dir = "./"
 credits-dir = "./"
 
 [dependencies]
-dactyl = "0.4.*"
+dactyl = "0.5.*"
 
 [dependencies.ahash]
 version = "0.8.*"
