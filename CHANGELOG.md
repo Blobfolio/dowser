@@ -2,6 +2,18 @@
 
 
 
+## [0.8.0](https://github.com/Blobfolio/dowser/releases/tag/v0.8.0) - 2023-06-01
+
+### Changed
+
+* Bump MSRV `1.70`
+* Update dependencies
+* Remove all `unsafe` code
+* Improve unit test coverage
+* Minor code changes and lints
+
+
+
 ## [0.7.0](https://github.com/Blobfolio/dowser/releases/tag/v0.7.0) - 2023-01-27
 
 ### New
