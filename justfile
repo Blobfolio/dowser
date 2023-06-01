@@ -103,7 +103,11 @@ bench BENCH="":
 # Unit tests!
 @test:
 	clear
-	RUST_TEST_THREADS=1 cargo test \
+	cargo test \
+		--target x86_64-unknown-linux-gnu \
+		--target-dir "{{ cargo_dir }}"
+
+	cargo test \
 		--release \
 		--target x86_64-unknown-linux-gnu \
 		--target-dir "{{ cargo_dir }}"
