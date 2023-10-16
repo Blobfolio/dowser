@@ -21,17 +21,6 @@ On the other hand, [`Dowser`] is optimized for _file_ searching; the iterator cr
 
 
 
-## Installation
-
-Add `dowser` to your `dependencies` in `Cargo.toml`, like:
-
-```text,ignore
-[dependencies]
-dowser = "0.6.*"
-```
-
-
-
 ## Example
 
 All you need to do is chain [`Dowser::default`] with one or more of the following seed methods:
