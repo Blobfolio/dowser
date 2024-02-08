@@ -2,6 +2,15 @@
 
 
 
+## [0.8.2](https://github.com/Blobfolio/dowser/releases/tag/v0.8.2) - 2024-02-08
+
+### Changed
+
+* Bump `dactyl` to `0.7`
+* Minor doc/script cleanup
+
+
+
 ## [0.8.1](https://github.com/Blobfolio/dowser/releases/tag/v0.8.1) - 2023-10-15
 
 ### Changed
