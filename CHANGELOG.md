@@ -2,6 +2,14 @@
 
 
 
+## [0.9.0](https://github.com/Blobfolio/dowser/releases/tag/v0.9.0) - 2024-02-15
+
+### Changed
+
+* Bump MSRV to `1.72`
+
+
+
 ## [0.8.2](https://github.com/Blobfolio/dowser/releases/tag/v0.8.2) - 2024-02-08
 
 ### Changed
