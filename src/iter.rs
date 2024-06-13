@@ -59,6 +59,7 @@ pub struct Dowser {
 }
 
 impl Default for Dowser {
+	#[inline]
 	fn default() -> Self {
 		Self {
 			files: Vec::with_capacity(8),
@@ -221,6 +222,7 @@ impl Dowser {
 
 impl Dowser {
 	#[must_use]
+	#[inline]
 	/// # Without Path.
 	///
 	/// This will prevent the provided directory or file from being crawled or
@@ -251,6 +253,7 @@ impl Dowser {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Without Paths.
 	///
 	/// This will prevent the provided directories or files from being crawled

@@ -151,6 +151,7 @@ pub enum Extension {
 impl Eq for Extension {}
 
 impl Hash for Extension {
+	#[inline]
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		match *self {
 			Self::Ext2(n) => { state.write_u16(n); },
@@ -173,6 +174,7 @@ impl PartialEq for Extension {
 
 impl<P> PartialEq<P> for Extension
 where P: AsRef<Path> {
+	#[inline]
 	/// # Path Equality.
 	///
 	/// When there's just one extension and one path to check, you can compare
@@ -201,6 +203,7 @@ where P: AsRef<Path> {
 /// # Unchecked Instantiation.
 impl Extension {
 	#[must_use]
+	#[inline]
 	/// # New Unchecked (2).
 	///
 	/// Create a new [`Extension`], unchecked, from two bytes, e.g. `*b"gz"`.
@@ -223,6 +226,7 @@ impl Extension {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # New Unchecked (3).
 	///
 	/// Create a new [`Extension`], unchecked, from three bytes, e.g. `*b"gif"`.
@@ -245,6 +249,7 @@ impl Extension {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # New Unchecked (4).
 	///
 	/// Create a new [`Extension`], unchecked, from four bytes, e.g. `*b"html"`.
@@ -270,6 +275,7 @@ impl Extension {
 /// # From Paths.
 impl Extension {
 	#[must_use]
+	#[inline]
 	/// # Try From Path (2).
 	///
 	/// This method is used to (try to) pull a 2-byte extension from a file
@@ -298,6 +304,7 @@ impl Extension {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Try From Path (3).
 	///
 	/// This method is used to (try to) pull a 3-byte extension from a file
@@ -326,6 +333,7 @@ impl Extension {
 	}
 
 	#[must_use]
+	#[inline]
 	/// # Try From Path (4).
 	///
 	/// This method is used to (try to) pull a 4-byte extension from a file
