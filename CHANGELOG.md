@@ -2,6 +2,14 @@
 
 
 
+## [0.9.1](https://github.com/Blobfolio/dowser/releases/tag/v0.9.1) - 2024-06-13
+
+### Changed
+
+* Add a few `#[inline]` hints to improve downstream performance
+
+
+
 ## [0.9.0](https://github.com/Blobfolio/dowser/releases/tag/v0.9.0) - 2024-02-15
 
 ### Changed
