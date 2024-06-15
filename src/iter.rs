@@ -321,12 +321,7 @@ impl Dowser {
 
 		if ! dirs.is_empty() {
 			loop {
-				// This little switcheroo allows us to push new directories
-				// straight into the original dirs collection.
-				let mut new = Vec::new();
-				std::mem::swap(&mut new, &mut dirs);
-
-				for p in new {
+				for p in std::mem::take(&mut dirs) {
 					if let Ok(rd) = std::fs::read_dir(p) {
 						for e in rd {
 							if let Some(e) = Entry::from_entry(e) {
@@ -396,12 +391,7 @@ impl Dowser {
 
 		if ! dirs.is_empty() {
 			loop {
-				// This little switcheroo allows us to push new directories
-				// straight into the original dirs collection.
-				let mut new = Vec::new();
-				std::mem::swap(&mut new, &mut dirs);
-
-				for p in new {
+				for p in std::mem::take(&mut dirs) {
 					if let Ok(rd) = std::fs::read_dir(p) {
 						for e in rd {
 							if let Some(e) = Entry::from_entry(e) {
