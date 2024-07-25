@@ -2,6 +2,14 @@
 
 
 
+## [0.9.2](https://github.com/Blobfolio/dowser/releases/tag/v0.9.2) - 2024-07-25
+
+### Changed
+
+* Miscellaneous code lints
+
+
+
 ## [0.9.1](https://github.com/Blobfolio/dowser/releases/tag/v0.9.1) - 2024-06-13
 
 ### Changed
