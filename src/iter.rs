@@ -53,8 +53,15 @@ use std::{
 ///     .collect();
 /// ```
 pub struct Dowser {
+	/// # Found Files.
 	files: Vec<PathBuf>,
+
+	/// # Found Directories.
 	dirs: Vec<PathBuf>,
+
+	/// # Encountered Hashes.
+	///
+	/// This is used to prevent parsing the same file/directory twice.
 	seen: HashSet<u64, NoHash>,
 }
 
@@ -69,6 +76,7 @@ impl Default for Dowser {
 	}
 }
 
+/// # Helper: Generate From Impl.
 macro_rules! from_single {
 	($($ty:ty),+ $(,)?) => ($(
 		impl From<$ty> for Dowser {
@@ -422,6 +430,7 @@ impl Dowser {
 /// implementing `IntoIterator<AsRef<Path>>`, at least until negative trait
 /// bounds are stabilized.
 fn is_singular_path<T>(raw: T) -> bool {
+	/// # Type to String.
 	fn type_of<T>(_: T) -> &'static str { std::any::type_name::<T>() }
 
 	let kind = type_of(raw).trim_start_matches('&');
@@ -470,7 +479,7 @@ mod tests {
 			.expect("Missing dowser link directory.")
 			.filter_map(Result::ok)
 			.filter_map(|e| e.file_type().ok())
-			.filter(|t| t.is_symlink())
+			.filter(std::fs::FileType::is_symlink)
 			.count();
 		assert_eq!(links, 1, "Wrong symlink count!");
 
@@ -499,14 +508,14 @@ mod tests {
 
 		// There should be two fewer entries as two are symlinks.
 		assert_eq!(raw.len(), 11);
-		assert_eq!(canon.len(), 8, "{:?}", canon);
+		assert_eq!(canon.len(), 8, "{canon:?}");
 		assert!(! canon.contains(&raw[6]));
 		assert!(! canon.contains(&raw[9]));
 		assert!(! canon.contains(&raw[10]));
 
 		let trusting = {
 			let mut tmp: Vec<PathBuf> = raw.iter()
-				.filter_map(|x| Entry::from_path(x))
+				.filter_map(Entry::from_path)
 				.map(|e| e.path)
 				.collect();
 			tmp.sort();
@@ -547,7 +556,7 @@ mod tests {
 	fn t_with_paths3() {
 		let path: &Path = "/usr/bin".as_ref();
 		// These shouldn't panic.
-		let _res = Dowser::default().with_paths(&[path]);
+		let _res = Dowser::default().with_paths([path]);
 		let _res = Dowser::default().with_paths(&[path.to_path_buf()]);
 	}
 
@@ -569,7 +578,7 @@ mod tests {
 	fn t_without_paths3() {
 		let path: &Path = "/usr/bin".as_ref();
 		// These shouldn't panic.
-		let _res = Dowser::default().without_paths(&[path]);
+		let _res = Dowser::default().without_paths([path]);
 		let _res = Dowser::default().without_paths(&[path.to_path_buf()]);
 	}
 }
