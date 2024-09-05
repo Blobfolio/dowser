@@ -15,14 +15,18 @@ use std::{
 
 
 
-#[allow(clippy::redundant_pub_crate)] // Fix this shit already. Haha.
 /// # File Entry.
 ///
 /// This holds a pre-computed hash, whether or not the path points to a
 /// directory, and the canonicalized path itself.
 pub(super) struct Entry {
+	/// # Path.
 	pub(super) path: PathBuf,
+
+	/// # Is Directory?
 	pub(super) is_dir: bool,
+
+	/// # Hash.
 	pub(super) hash: u64,
 }
 
