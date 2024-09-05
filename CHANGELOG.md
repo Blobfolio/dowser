@@ -2,6 +2,15 @@
 
 
 
+## [0.9.3](https://github.com/Blobfolio/dowser/releases/tag/v0.9.3) - 2024-09-05
+
+### Changed
+
+* Miscellaneous code cleanup and lints
+* Bump `brunch` to `0.6`
+
+
+
 ## [0.9.2](https://github.com/Blobfolio/dowser/releases/tag/v0.9.2) - 2024-07-25
 
 ### Changed
