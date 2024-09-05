@@ -36,7 +36,7 @@ version = "0.8.*"
 default-features = false
 
 [dev-dependencies]
-brunch = "0.5.*"
+brunch = "0.6.*"
 
 [[bench]]
 name = "dowser"
