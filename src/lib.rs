@@ -74,7 +74,7 @@ assert_eq!(files1.len(), files2.len());
 #![forbid(unsafe_code)]
 
 #![deny(
-	// TODO: clippy::allow_attributes_without_reason,
+	clippy::allow_attributes_without_reason,
 	clippy::correctness,
 	unreachable_pub,
 )]
@@ -86,7 +86,7 @@ assert_eq!(files1.len(), files2.len());
 	clippy::perf,
 	clippy::style,
 
-	// TODO: clippy::allow_attributes,
+	clippy::allow_attributes,
 	clippy::clone_on_ref_ptr,
 	clippy::create_dir,
 	clippy::filetype_is_file,
@@ -120,7 +120,7 @@ assert_eq!(files1.len(), files2.len());
 	unused_import_braces,
 )]
 
-#![allow(clippy::redundant_pub_crate)] // Unresolvable.
+#![expect(clippy::redundant_pub_crate, reason = "Unresolvable.")]
 
 mod entry;
 mod ext;

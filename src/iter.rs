@@ -249,7 +249,7 @@ impl Dowser {
 	///
 	/// // Read the paths from list.txt.
 	/// let mut crawler = Dowser::default();
-	/// crawler.load_paths_from_file("list.txt").unwrap();
+	/// crawler.read_paths_from_file("list.txt").unwrap();
 	///
 	/// // Crunch into a vec.
 	/// let files: Vec::<PathBuf> = crawler.collect();
@@ -259,7 +259,7 @@ impl Dowser {
 	///
 	/// This method will bubble up any errors encountered while trying to read
 	/// the text file.
-	pub fn load_paths_from_file<P: AsRef<Path>>(&mut self, src: P)
+	pub fn read_paths_from_file<P: AsRef<Path>>(&mut self, src: P)
 	-> Result<(), std::io::Error> {
 		let raw = std::fs::read_to_string(src)?;
 		for line in raw.lines() {
@@ -633,7 +633,7 @@ mod tests {
 	}
 
 	#[test]
-	fn t_load_paths_from_file() {
+	fn t_read_paths_from_file() {
 		use std::collections::BTreeSet;
 		use std::fs::File;
 		use std::io::Write;
@@ -667,7 +667,7 @@ mod tests {
 		if res.is_ok() && text_file.is_file() {
 			// Feed the text file to dowser, collect the results.
 			let mut crawl = Dowser::default();
-			crawl.load_paths_from_file(&text_file)
+			crawl.read_paths_from_file(&text_file)
 				.expect("Loading text file failed.");
 			let found: BTreeSet<PathBuf> = crawl.collect();
 

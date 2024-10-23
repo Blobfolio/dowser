@@ -6,7 +6,12 @@
 
 ### New
 
-* `Dowser::load_paths_from_file`
+* `Dowser::read_paths_from_file`
+
+### Changed
+
+* Bump MSRV to `1.81`
+* Update lints
 
 
 
