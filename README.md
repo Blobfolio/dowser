@@ -26,7 +26,7 @@ Add `dowser` to your `dependencies` in `Cargo.toml`, like:
 
 ```
 [dependencies]
-dowser = "0.9.*"
+dowser = "0.10.*"
 ```
 
 
