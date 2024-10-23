@@ -2,6 +2,19 @@
 
 
 
+## [0.10.0](https://github.com/Blobfolio/dowser/releases/tag/v0.10.0) - 2024-10-22
+
+### New
+
+* `Dowser::read_paths_from_file`
+
+### Changed
+
+* Bump MSRV to `1.81`
+* Miscellaneous code cleanup and lints
+
+
+
 ## [0.9.3](https://github.com/Blobfolio/dowser/releases/tag/v0.9.3) - 2024-09-05
 
 ### Changed

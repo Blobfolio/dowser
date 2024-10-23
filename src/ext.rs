@@ -545,7 +545,7 @@ impl Extension {
 
 /// # Codegen Helpers.
 impl Extension {
-	#[allow(clippy::needless_doctest_main)] // For demonstration.
+	#[expect(clippy::needless_doctest_main, reason = "For demonstration.")]
 	#[must_use]
 	/// # Codegen Helper.
 	///
