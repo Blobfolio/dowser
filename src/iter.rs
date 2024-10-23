@@ -229,6 +229,56 @@ impl Dowser {
 }
 
 impl Dowser {
+	/// # Load Paths From File.
+	///
+	/// Queue up multiple file and/or directory paths from a text file, one
+	/// entry per line.
+	///
+	/// Lines are trimmed and ignored if empty, but otherwise resolved the
+	/// same as if passed directly to methods like [`Dowser::with_path`], i.e.
+	/// relative to the current working directory (not the text file itself).
+	///
+	/// For that reason, it is recommended that all paths stored in text files
+	/// be absolute to avoid any ambiguity.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// // Read the paths from list.txt.
+	/// let mut crawler = Dowser::default();
+	/// crawler.load_paths_from_file("list.txt").unwrap();
+	///
+	/// // Crunch into a vec.
+	/// let files: Vec::<PathBuf> = crawler.collect();
+	/// ```
+	///
+	/// ## Errors
+	///
+	/// This method will bubble up any errors encountered while trying to read
+	/// the text file.
+	pub fn load_paths_from_file<P: AsRef<Path>>(&mut self, src: P)
+	-> Result<(), std::io::Error> {
+		let raw = std::fs::read_to_string(src)?;
+		for line in raw.lines() {
+			let line = line.trim();
+			if ! line.is_empty() {
+				if let Some(e) = Entry::from_path(line) {
+					if self.seen.insert(e.hash) {
+						if e.is_dir { self.dirs.push(e.path); }
+						else { self.files.push(e.path); }
+					}
+				}
+			}
+		}
+
+		Ok(())
+	}
+}
+
+impl Dowser {
 	#[must_use]
 	#[inline]
 	/// # Without Path.
@@ -580,5 +630,56 @@ mod tests {
 		// These shouldn't panic.
 		let _res = Dowser::default().without_paths([path]);
 		let _res = Dowser::default().without_paths(&[path.to_path_buf()]);
+	}
+
+	#[test]
+	fn t_load_paths_from_file() {
+		use std::collections::BTreeSet;
+		use std::fs::File;
+		use std::io::Write;
+
+		// Find the temporary directory.
+		let tmp = std::env::temp_dir();
+		if ! tmp.is_dir() { return; }
+
+		// Declare a few paths to test crawl.
+		let asset_dir = std::fs::canonicalize("tests/assets")
+			.expect("Missing dowser assets dir");
+		let link01 = std::fs::canonicalize("tests/links/01")
+			.expect("Missing dowser links/01");
+
+		// Mock up a text file containing those entries.
+		let text_file = tmp.join("dowser.test.txt");
+		let text = format!(
+			"{}\n{}\n",
+			asset_dir.as_os_str().to_str().expect("Asset dir cannot be represented as a string."),
+			link01.as_os_str().to_str().expect("Link01 cannot be represented as a string."),
+		);
+
+		// Try to save the text file.
+		let res = File::create(&text_file)
+			.and_then(|mut file|
+				file.write_all(text.as_bytes()).and_then(|()| file.flush())
+			);
+
+		// Not all environments will allow that; only proceed with the testing
+		// if it worked.
+		if res.is_ok() && text_file.is_file() {
+			// Feed the text file to dowser, collect the results.
+			let mut crawl = Dowser::default();
+			crawl.load_paths_from_file(&text_file)
+				.expect("Loading text file failed.");
+			let found: BTreeSet<PathBuf> = crawl.collect();
+
+			// We don't need the text file anymore.
+			let _res = std::fs::remove_file(text_file);
+
+			// It should have found the following!
+			assert!(found.len() == 4);
+			assert!(found.contains(&link01));
+			assert!(found.contains(&asset_dir.join("file.txt")));
+			assert!(found.contains(&asset_dir.join("functioning.JPEG")));
+			assert!(found.contains(&asset_dir.join("is-executable.sh")));
+		}
 	}
 }
