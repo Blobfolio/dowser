@@ -11,7 +11,7 @@
 ### Changed
 
 * Bump MSRV to `1.81`
-* Update lints
+* Miscellaneous code cleanup and lints
 
 
 

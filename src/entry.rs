@@ -2,16 +2,26 @@
 # Dowser: Obligatory `DirEntry` Replacement.
 */
 
-use ahash::AHasher;
 use std::{
 	fs::DirEntry,
-	hash::Hasher,
 	io::Result,
 	path::{
 		Path,
 		PathBuf,
 	},
 };
+
+
+
+/// # Static Hasher.
+///
+/// This is used for cheap collision detection. No need to get fancy with it.
+const AHASHER: ahash::RandomState = ahash::RandomState::with_seeds(
+	0x8596_cc44_bef0_1aa0,
+	0x98d4_0948_da60_19ae,
+	0x49f1_3013_c503_a6aa,
+	0xc4d7_82ff_3c9f_7bef,
+);
 
 
 
@@ -69,27 +79,22 @@ impl Entry {
 
 	#[cfg(unix)]
 	#[must_use]
+	#[inline]
 	/// # Hash Path.
 	///
 	/// Since all paths are canonical, we can test for uniqueness by simply
 	/// hashing them.
 	pub(super) fn hash_path(path: &Path) -> u64 {
 		use std::os::unix::ffi::OsStrExt;
-		let mut hasher = AHasher::default();
-		hasher.write(path.as_os_str().as_bytes());
-		hasher.finish()
+		AHASHER.hash_one(path.as_os_str().as_bytes())
 	}
 
 	#[cfg(not(unix))]
 	#[must_use]
+	#[inline]
 	/// # Hash Path.
 	///
 	/// Since all paths are canonical, we can test for uniqueness by simply
 	/// hashing them.
-	pub(super) fn hash_path(path: &Path) -> u64 {
-		use std::hash::Hash;
-		let mut hasher = AHasher::default();
-		path.hash(&mut hasher);
-		hasher.finish()
-	}
+	pub(super) fn hash_path(path: &Path) -> u64 { AHASHER.hash_one(path) }
 }
