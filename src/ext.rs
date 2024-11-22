@@ -109,9 +109,9 @@ macro_rules! path_slice {
 /// let paths = vec![PathBuf::from("/path/to/image.png")];
 ///
 /// paths.iter()
-///     .filter(|p| p.extension()
-///         .map_or(false, |e| e.eq_ignore_ascii_case(OsStr::new("png")))
-///     )
+///     .filter(|p| p.extension().is_some_and(|e|
+///         e.eq_ignore_ascii_case(OsStr::new("png"))
+///     ))
 ///     .for_each(|p| todo!());
 /// ```
 ///
@@ -128,7 +128,7 @@ macro_rules! path_slice {
 /// const EXT: Extension = Extension::new3(*b"png");
 ///
 /// paths.iter()
-///     .filter(|p| Extension::try_from3(p).map_or(false, |e| e == EXT))
+///     .filter(|p| Extension::try_from3(p) == Some(EXT))
 ///     .for_each(|p| todo!());
 /// ```
 pub enum Extension {
@@ -196,7 +196,7 @@ where P: AsRef<Path> {
 			Self::Ext3(_) => Self::try_from3(other),
 			Self::Ext4(_) => Self::try_from4(other),
 		}
-			.map_or(false, |e| e.eq(self))
+			.is_some_and(|e| e.eq(self))
 	}
 }
 

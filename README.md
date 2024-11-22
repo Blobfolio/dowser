@@ -60,10 +60,7 @@ assert_eq!(files1.len(), files2.len());
 let files1: Vec::<PathBuf> = Dowser::default()
     .with_path("/usr/share/man")
     .filter(|p|
-        p.extension().map_or(
-            false,
-            |e| e.eq_ignore_ascii_case("gz")
-        )
+        p.extension().is_some_and(|e| e.eq_ignore_ascii_case("gz"))
     )
     .collect();
 
@@ -71,10 +68,7 @@ let files1: Vec::<PathBuf> = Dowser::default()
 let files2: Vec::<PathBuf> = Dowser::default()
     .with_path("/usr/share/man")
     .into_vec_filtered(|p|
-        p.extension().map_or(
-            false,
-            |e| e.eq_ignore_ascii_case("gz")
-        )
+        p.extension().is_some_and(|e| e.eq_ignore_ascii_case("gz"))
     );
 
 assert_eq!(files1.len(), files2.len());
