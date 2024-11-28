@@ -20,7 +20,7 @@ fn test_std<P>(path: P) -> bool
 where P: AsRef<Path> {
 	path.as_ref()
 		.extension()
-		.map_or(false, |p| p.as_bytes().eq_ignore_ascii_case(JPG_ARR))
+		.is_some_and(|p| p.as_bytes().eq_ignore_ascii_case(JPG_ARR))
 }
 
 /// # Dowser.

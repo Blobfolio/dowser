@@ -1,7 +1,7 @@
 [package]
 name = "dowser"
-version = "0.10.0"
-authors = ["Blobfolio, LLC. <hello@blobfolio.com>"]
+version = "0.10.1"
+authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2021"
 rust-version = "1.81"
 description = "A recursive, canonicalizing file finding library for Unix."
@@ -24,19 +24,16 @@ default-target = "x86_64-unknown-linux-gnu"
 
 [package.metadata.bashman]
 name = "Dowser"
-bash-dir = "./"
-man-dir = "./"
-credits-dir = "./"
 
 [dependencies]
-dactyl = "0.7.*"
+dactyl = "0.8.*"
 
 [dependencies.ahash]
 version = "0.8.*"
 default-features = false
 
 [dev-dependencies]
-brunch = "0.6.*"
+brunch = "0.7.*"
 
 [[bench]]
 name = "dowser"
