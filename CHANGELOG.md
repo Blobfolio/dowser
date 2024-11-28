@@ -2,6 +2,16 @@
 
 
 
+## [0.10.1](https://github.com/Blobfolio/dowser/releases/tag/v0.10.1) - 2024-11-28
+
+### Changed
+
+* Bump `brunch` to `0.7`
+* Bump `dactyl` to `0.8`
+* Miscellaneous code cleanup and lints
+
+
+
 ## [0.10.0](https://github.com/Blobfolio/dowser/releases/tag/v0.10.0) - 2024-10-22
 
 ### New
