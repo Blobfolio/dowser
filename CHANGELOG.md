@@ -2,6 +2,16 @@
 
 
 
+## [0.11.0](https://github.com/Blobfolio/dowser/releases/tag/v0.11.0) - TBD
+
+### Changed
+
+* Bump `brunch` to `0.8` (dev)
+* Bump `dactyl` to `0.9`
+* Bump MSRV to `1.83`
+
+
+
 ## [0.10.1](https://github.com/Blobfolio/dowser/releases/tag/v0.10.1) - 2024-11-28
 
 ### Changed
