@@ -46,12 +46,18 @@ impl Entry {
 	///
 	/// Because [`Dowser`] canonicalizes all seed paths, we can assume that
 	/// any non-symlinked `DirEntry` is also canonical, thus avoiding expensive
-	/// syscalls. (If it is, we'll canonicalize it first.)
-	pub(super) fn from_entry(e: Result<DirEntry>) -> Option<Self> {
-		// If this is a symlink, we have to follow it.
+	/// syscalls.
+	///
+	/// If it is a symlink and symlinks are allowed, we'll canonicalize it
+	/// before processing. If symlinks aren't allowed, `None` is returned, duh.
+	pub(super) fn from_entry(e: Result<DirEntry>, symlinks: bool) -> Option<Self> {
 		let e = e.ok()?;
 		let ft = e.file_type().ok()?;
-		if ft.is_symlink() { Self::from_path(e.path()) }
+		if ft.is_symlink() {
+			// If this is a symlink, we have to follow it.
+			if symlinks { Self::from_path(e.path(), true) }
+			else { None } // Unless we're not supposed to.
+		}
 		else {
 			let path = e.path();
 			let hash = Self::hash_path(&path);
@@ -68,8 +74,17 @@ impl Entry {
 	///
 	/// Paths sent to this method are untrusted and forced through
 	/// canonicalization before any metadata is worked out.
-	pub(super) fn from_path<P>(path: P) -> Option<Self>
+	pub(super) fn from_path<P>(path: P, symlinks: bool) -> Option<Self>
 	where P: AsRef<Path> {
+		let path: &Path = path.as_ref();
+
+		// If symlinks are to be avoided, we need to confirm the type before
+		// canonicalizing!
+		if ! symlinks {
+			let meta = std::fs::symlink_metadata(path).ok()?;
+			if meta.file_type().is_symlink() { return None; }
+		}
+
 		let path = std::fs::canonicalize(path).ok()?;
 		let hash = Self::hash_path(&path);
 		let is_dir = path.is_dir();

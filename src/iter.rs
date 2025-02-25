@@ -63,6 +63,11 @@ pub struct Dowser {
 	///
 	/// This is used to prevent parsing the same file/directory twice.
 	seen: HashSet<u64, NoHash>,
+
+	/// # Symlinks?
+	///
+	/// If `true`, follow and canonicalize symlinks; if `false`, ignore them.
+	symlinks: bool,
 }
 
 impl Default for Dowser {
@@ -72,6 +77,7 @@ impl Default for Dowser {
 			files: Vec::with_capacity(8),
 			dirs: Vec::with_capacity(8),
 			seen: HashSet::with_capacity_and_hasher(4096, NoHash::default()),
+			symlinks: true,
 		}
 	}
 }
@@ -92,7 +98,7 @@ impl From<&[PathBuf]> for Dowser {
 	fn from(src: &[PathBuf]) -> Self {
 		let mut out = Self::default();
 
-		for e in src.iter().filter_map(Entry::from_path) {
+		for e in src.iter().filter_map(|p| Entry::from_path(p, true)) {
 			if out.seen.insert(e.hash) {
 				if e.is_dir { out.dirs.push(e.path); }
 				else { out.files.push(e.path); }
@@ -107,7 +113,7 @@ impl From<Vec<PathBuf>> for Dowser {
 	fn from(src: Vec<PathBuf>) -> Self {
 		let mut out = Self::default();
 
-		for e in src.into_iter().filter_map(Entry::from_path) {
+		for e in src.into_iter().filter_map(|p| Entry::from_path(p, true)) {
 			if out.seen.insert(e.hash) {
 				if e.is_dir { out.dirs.push(e.path); }
 				else { out.files.push(e.path); }
@@ -137,7 +143,7 @@ impl Iterator for Dowser {
 			if let Some(p) = self.dirs.pop() {
 				let Ok(rd) = std::fs::read_dir(p) else { continue; };
 				for e in rd {
-					if let Some(e) = Entry::from_entry(e) {
+					if let Some(e) = Entry::from_entry(e, self.symlinks) {
 						if self.seen.insert(e.hash) {
 							if e.is_dir { self.dirs.push(e.path); }
 							else { self.files.push(e.path); }
@@ -188,7 +194,7 @@ impl Dowser {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some(e) = Entry::from_path(path) {
+		if let Some(e) = Entry::from_path(path, self.symlinks) {
 			if self.seen.insert(e.hash) {
 				if e.is_dir { self.dirs.push(e.path); }
 				else { self.files.push(e.path); }
@@ -264,7 +270,7 @@ impl Dowser {
 		for line in raw.lines() {
 			let line = line.trim();
 			if ! line.is_empty() {
-				if let Some(e) = Entry::from_path(line) {
+				if let Some(e) = Entry::from_path(line, self.symlinks) {
 					if self.seen.insert(e.hash) {
 						if e.is_dir { self.dirs.push(e.path); }
 						else { self.files.push(e.path); }
@@ -278,6 +284,32 @@ impl Dowser {
 }
 
 impl Dowser {
+	#[must_use]
+	#[inline]
+	/// # Without Symlinks.
+	///
+	/// Ignore any and all symlinks rather than following them, as [`Dowser`]
+	/// otherwise does by default.
+	///
+	/// Note: this setting is not retroactive; call this method before adding
+	/// any paths.
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files: Vec<PathBuf> = Dowser::default() // Symlinks would be followed.
+	///     .without_symlinks()                     // Now they won't be!
+	///     .with_path("/my/dir")
+	///     .collect();
+	/// ```
+	pub const fn without_symlinks(mut self) -> Self {
+		self.symlinks = false;
+		self
+	}
+
 	#[must_use]
 	#[inline]
 	/// # Without Path.
@@ -301,10 +333,19 @@ impl Dowser {
 	/// ```
 	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Ok(p) = std::fs::canonicalize(path) {
-			let hash = Entry::hash_path(&p);
-			self.seen.insert(hash);
+		let path: &Path = path.as_ref();
+
+		// Canonicalization might be conditional.
+		if
+			self.symlinks ||
+			std::fs::symlink_metadata(path).is_ok_and(|m| ! m.file_type().is_symlink())
+		{
+			if let Ok(p) = std::fs::canonicalize(path) {
+				let hash = Entry::hash_path(&p);
+				self.seen.insert(hash);
+			}
 		}
+
 
 		self
 	}
@@ -340,9 +381,21 @@ impl Dowser {
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
 		assert!(! is_singular_path(&paths), "Dowser::without_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
 
-		self.seen.extend(paths.into_iter().filter_map(|p|
-			std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
-		));
+		if self.symlinks {
+			self.seen.extend(paths.into_iter().filter_map(|p|
+				std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
+			));
+		}
+		else {
+			self.seen.extend(paths.into_iter().filter_map(|p| {
+				let meta = std::fs::symlink_metadata(&p).ok()?;
+				if meta.file_type().is_symlink() { None }
+				else {
+					std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
+				}
+			}));
+		}
+
 		self
 	}
 }
@@ -374,12 +427,12 @@ impl Dowser {
 	///     .into_vec();
 	/// ```
 	pub fn into_vec(self) -> Vec<PathBuf> {
-		let Self { mut files, mut dirs, mut seen } = self;
+		let Self { mut files, mut dirs, mut seen, symlinks } = self;
 
 		while let Some(p) = dirs.pop() {
 			let Ok(rd) = std::fs::read_dir(p) else { continue; };
 			for e in rd {
-				if let Some(e) = Entry::from_entry(e) {
+				if let Some(e) = Entry::from_entry(e, symlinks) {
 					if seen.insert(e.hash) {
 						if e.is_dir { dirs.push(e.path); }
 						else { files.push(e.path); }
@@ -434,7 +487,7 @@ impl Dowser {
 	/// ```
 	pub fn into_vec_filtered<F>(self, cb: F) -> Vec<PathBuf>
 	where F: Fn(&Path) -> bool + Sync + Send {
-		let Self { mut files, mut dirs, mut seen } = self;
+		let Self { mut files, mut dirs, mut seen, symlinks } = self;
 
 		// We wouldn't have had a chance to filter these yet.
 		if ! files.is_empty() { files.retain(|p| cb(p)); }
@@ -442,7 +495,7 @@ impl Dowser {
 		while let Some(p) = dirs.pop() {
 			let Ok(rd) = std::fs::read_dir(p) else { continue; };
 			for e in rd {
-				if let Some(e) = Entry::from_entry(e) {
+				if let Some(e) = Entry::from_entry(e, symlinks) {
 					if seen.insert(e.hash) {
 						if e.is_dir { dirs.push(e.path); }
 						else if cb(&e.path) { files.push(e.path); }
@@ -550,7 +603,7 @@ mod tests {
 
 		let trusting = {
 			let mut tmp: Vec<PathBuf> = raw.iter()
-				.filter_map(Entry::from_path)
+				.filter_map(|p| Entry::from_path(p, true))
 				.map(|e| e.path)
 				.collect();
 			tmp.sort();
@@ -571,6 +624,37 @@ mod tests {
 		itered = Dowser::from(test_dir.as_path()).into_vec_filtered(|_| true);
 		itered.sort();
 		assert_eq!(canon, itered);
+
+		// Almost done... last thing to check is the symlink logic!
+		let six_dir = std::fs::canonicalize(test_dir.join("06")).expect("Missing test dir 06");
+		let yay: Vec<_> = Dowser::default().with_path(&six_dir).collect();
+		let nay: Vec<_> = Dowser::default().without_symlinks().with_path(&six_dir).collect();
+		assert!(! nay.is_empty(), "BUG: Symlinks logic broke totals.");
+		assert!(nay.len() < yay.len(), "BUG: Symlinks were followed!");
+		assert!(
+			nay.iter().all(|p| p.parent().is_some_and(|p| p == six_dir)),
+			"Bug: Symlinks were followed!",
+		);
+
+		// The same thing, using into_vec.
+		let yay: Vec<_> = Dowser::default().with_path(&six_dir).into_vec();
+		let nay: Vec<_> = Dowser::default().without_symlinks().with_path(&six_dir).into_vec();
+		assert!(! nay.is_empty(), "BUG: Symlinks logic broke totals.");
+		assert!(nay.len() < yay.len(), "BUG: Symlinks were followed!");
+		assert!(
+			nay.iter().all(|p| p.parent().is_some_and(|p| p == six_dir)),
+			"Bug: Symlinks were followed!",
+		);
+
+		// One last time...
+		let yay: Vec<_> = Dowser::default().with_path(&six_dir).into_vec_filtered(|_| true);
+		let nay: Vec<_> = Dowser::default().without_symlinks().with_path(&six_dir).into_vec_filtered(|_| true);
+		assert!(! nay.is_empty(), "BUG: Symlinks logic broke totals.");
+		assert!(nay.len() < yay.len(), "BUG: Symlinks were followed!");
+		assert!(
+			nay.iter().all(|p| p.parent().is_some_and(|p| p == six_dir)),
+			"Bug: Symlinks were followed!",
+		);
 	}
 
 	#[test]
