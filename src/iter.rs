@@ -37,8 +37,7 @@ use std::{
 /// If using `without_*`, be sure to chain those _first_, before any `with_*`
 /// calls, just in case your withs and withouts overlap. ;)
 ///
-/// From there, you can do your normal [`Iterator`](std::iter::Iterator) business, or if you just want to
-/// collect the results into a vector, call [`Dowser::into_vec`] or [`Dowser::into_vec_filtered`].
+/// From there, you can do your normal [`Iterator`](std::iter::Iterator) business.
 ///
 /// ## Examples
 ///
@@ -387,120 +386,6 @@ impl Dowser {
 	}
 }
 
-impl Dowser {
-	#[must_use]
-	/// # Consume Into Vec.
-	///
-	/// This method is an optimized alternative to running
-	/// `Dowser.iter().collect::<Vec<PathBuf>>()`.
-	///
-	/// It yields the same results as the above, but makes fewer allocations
-	/// along the way.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// // The iterator way.
-	/// let files: Vec<PathBuf> = Dowser::default()
-	///     .with_path("/usr/share")
-	///     .collect();
-	///
-	/// // The optimized way.
-	/// let files: Vec<PathBuf> = Dowser::default()
-	///     .with_path("/usr/share")
-	///     .into_vec();
-	/// ```
-	pub fn into_vec(self) -> Vec<PathBuf> {
-		let Self { mut files, mut dirs, mut seen, symlinks } = self;
-
-		while let Some(p) = dirs.pop() {
-			let Ok(rd) = std::fs::read_dir(p) else { continue; };
-			for e in rd {
-				if let Some(e) = Entry::from_entry(e, symlinks) {
-					if seen.insert(e.hash()) {
-						match e {
-							Entry::Dir(p) =>  { dirs.push(p); },
-							Entry::File(p) => { files.push(p); },
-						}
-					}
-				}
-			}
-		}
-
-		// Done!
-		files
-	}
-
-	#[must_use]
-	/// # Consume Into Vec (Filtered).
-	///
-	/// This method is an optimized alternative to running
-	/// `Dowser.iter().filter(…).collect::<Vec<PathBuf>>()`.
-	///
-	/// It yields the same results as the above, but makes fewer allocations
-	/// along the way.
-	///
-	/// Note: every entry passed to your callback will be a valid, canonical
-	/// file path. (You don't have to explicitly test for [`is_file`](std::path::Path::is_file) or
-	/// anything like that.)
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// // The iterator way.
-	/// let files: Vec<PathBuf> = Dowser::default()
-	///     .with_path("/usr/share")
-	///     .filter(|p|
-	///         p.extension().map_or(
-    ///             false,
-    ///             |e| e.eq_ignore_ascii_case("jpg")
-    ///         )
-	///     )
-	///     .collect();
-	///
-	/// // The optimized way.
-	/// let files: Vec<PathBuf> = Dowser::default()
-	///     .with_path("/usr/share")
-	///     .into_vec_filtered(|p|
-	///         p.extension().map_or(
-    ///             false,
-    ///             |e| e.eq_ignore_ascii_case("jpg")
-    ///         )
-	///     );
-	/// ```
-	pub fn into_vec_filtered<F>(self, cb: F) -> Vec<PathBuf>
-	where F: Fn(&Path) -> bool + Sync + Send {
-		let Self { mut files, mut dirs, mut seen, symlinks } = self;
-
-		// We wouldn't have had a chance to filter these yet.
-		if ! files.is_empty() { files.retain(|p| cb(p)); }
-
-		while let Some(p) = dirs.pop() {
-			let Ok(rd) = std::fs::read_dir(p) else { continue; };
-			for e in rd {
-				if let Some(e) = Entry::from_entry(e, symlinks) {
-					if seen.insert(e.hash()) {
-						match e {
-							Entry::Dir(p) =>  { dirs.push(p); },
-							Entry::File(p) =>
-								if cb(&p) { files.push(p); },
-						}
-					}
-				}
-			}
-		}
-
-		// Done!
-		files
-	}
-}
-
 
 
 /// # Is Singular Path?
@@ -613,34 +498,10 @@ mod tests {
 		itered.sort();
 		assert_eq!(canon, itered);
 
-		itered = Dowser::from(test_dir.as_path()).into_vec_filtered(|_| true);
-		itered.sort();
-		assert_eq!(canon, itered);
-
 		// Almost done... last thing to check is the symlink logic!
 		let six_dir = std::fs::canonicalize(test_dir.join("06")).expect("Missing test dir 06");
 		let yay: Vec<_> = Dowser::default().with_path(&six_dir).collect();
 		let nay: Vec<_> = Dowser::default().without_symlinks().with_path(&six_dir).collect();
-		assert!(! nay.is_empty(), "BUG: Symlinks logic broke totals.");
-		assert!(nay.len() < yay.len(), "BUG: Symlinks were followed!");
-		assert!(
-			nay.iter().all(|p| p.parent().is_some_and(|p| p == six_dir)),
-			"Bug: Symlinks were followed!",
-		);
-
-		// The same thing, using into_vec.
-		let yay: Vec<_> = Dowser::default().with_path(&six_dir).into_vec();
-		let nay: Vec<_> = Dowser::default().without_symlinks().with_path(&six_dir).into_vec();
-		assert!(! nay.is_empty(), "BUG: Symlinks logic broke totals.");
-		assert!(nay.len() < yay.len(), "BUG: Symlinks were followed!");
-		assert!(
-			nay.iter().all(|p| p.parent().is_some_and(|p| p == six_dir)),
-			"Bug: Symlinks were followed!",
-		);
-
-		// One last time...
-		let yay: Vec<_> = Dowser::default().with_path(&six_dir).into_vec_filtered(|_| true);
-		let nay: Vec<_> = Dowser::default().without_symlinks().with_path(&six_dir).into_vec_filtered(|_| true);
 		assert!(! nay.is_empty(), "BUG: Symlinks logic broke totals.");
 		assert!(nay.len() < yay.len(), "BUG: Symlinks were followed!");
 		assert!(
