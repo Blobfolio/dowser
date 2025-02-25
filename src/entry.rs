@@ -35,28 +35,13 @@ pub(super) enum Entry {
 }
 
 impl Entry {
-	#[expect(clippy::filetype_is_file, reason = "It's what we want.")]
-	/// # From `DirEntry` Result.
-	pub(super) fn from_entry(e: Result<DirEntry>, symlinks: bool) -> Option<Self> {
-		let e = e.ok()?;
-		let ft = e.file_type().ok()?;
-
-		// We can assume the path is canonical because the root we crawled to
-		// get this record was itself canonical.
-		if ft.is_dir() { Some(Self::Dir(e.path())) }
-		else if ft.is_file() { Some(Self::File(e.path())) }
-		// Except for symlinks, of course, which need to be followed if
-		// allowed…
-		else if symlinks {
-			let path = std::fs::canonicalize(e.path()).ok()?;
-			if path.is_dir() { Some(Self::Dir(path)) }
-			else { Some(Self::File(path)) }
-		}
-		// And ignored if not.
-		else { None }
-	}
-
 	/// # From Path.
+	///
+	/// Evaluate an arbitrary path, canonicalizing and categorizing it into
+	/// an appropriate [`Entry`].
+	///
+	/// If the path doesn't exist or is a symlink and `symlinks` is false,
+	/// `None` will be returned instead.
 	pub(super) fn from_path(path: &Path, symlinks: bool) -> Option<Self> {
 		// If symlinks are to be avoided, we need to confirm the type before
 		// canonicalizing!
@@ -65,11 +50,34 @@ impl Entry {
 			if meta.file_type().is_symlink() { return None; }
 		}
 
-		// Unassociated paths can be anything; we have to canonicalize to make
-		// sense of it.
+		// Canonicalize and return!
 		let path = std::fs::canonicalize(path).ok()?;
 		if path.is_dir() { Some(Self::Dir(path)) }
 		else { Some(Self::File(path)) }
+	}
+
+	#[expect(clippy::filetype_is_file, reason = "We're testing all three possibilities.")]
+	#[inline]
+	/// # From `DirEntry` Result.
+	///
+	/// This is an optimized alternative to [`Entry::from_path`] used during
+	/// `read_dir` iteration.
+	pub(super) fn from_entry(e: Result<DirEntry>, symlinks: bool) -> Option<Self> {
+		let e = e.ok()?;
+		let ft = e.file_type().ok()?;
+
+		// We can assume the path is canonical because the root we crawled to
+		// get this record was itself canonical.
+		if ft.is_dir() { Some(Self::Dir(e.path())) }
+		else if ft.is_file() { Some(Self::File(e.path())) }
+		// Except for symlinks, of course, which could point anywhere.
+		else if symlinks {
+			let path = std::fs::canonicalize(e.path()).ok()?;
+			if path.is_dir() { Some(Self::Dir(path)) }
+			else { Some(Self::File(path)) }
+		}
+		// Unless we don't want them, in which case we can simply ignore them.
+		else { None }
 	}
 
 	#[cfg(unix)]

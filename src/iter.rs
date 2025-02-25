@@ -138,29 +138,23 @@ impl Iterator for Dowser {
 	/// Note: item ordering is arbitrary and likely to change from run-to-run.
 	fn next(&mut self) -> Option<Self::Item> {
 		loop {
-			// We have a file ready to go!
-			if let Some(p) = self.files.pop() {
-				return Some(p);
-			}
+			// If we have a file ready-to-go, return it!
+			if let Some(p) = self.files.pop() { return Some(p); }
 
-			if let Some(p) = self.dirs.pop() {
-				let Ok(rd) = std::fs::read_dir(p) else { continue; };
-				for e in rd {
-					if let Some(e) = Entry::from_entry(e, self.symlinks) {
-						if self.seen.insert(e.hash()) {
-							match e {
-								Entry::Dir(p) =>  { self.dirs.push(p); },
-								Entry::File(p) => { self.files.push(p); },
-							}
+			// Otherwise crawl the next directory, if any.
+			let p = self.dirs.pop()?;
+			let Ok(rd) = std::fs::read_dir(p) else { continue; };
+			for e in rd {
+				if let Some(e) = Entry::from_entry(e, self.symlinks) {
+					if self.seen.insert(e.hash()) {
+						match e {
+							Entry::Dir(p) =>  { self.dirs.push(p); },
+							Entry::File(p) => { self.files.push(p); },
 						}
 					}
 				}
 			}
-			// We're out of things to do!
-			else { break; }
 		}
-
-		None
 	}
 
 	/// # Size Hints.
@@ -170,10 +164,7 @@ impl Iterator for Dowser {
 	/// found there.
 	fn size_hint(&self) -> (usize, Option<usize>) {
 		let lower = self.files.len();
-		let upper =
-			if self.dirs.is_empty() { Some(lower) }
-			else { None };
-
+		let upper = self.dirs.is_empty().then_some(lower);
 		(lower, upper)
 	}
 }
