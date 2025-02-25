@@ -2,6 +2,15 @@
 
 
 
+## [0.12.0](https://github.com/Blobfolio/dowser/releases/tag/v0.12.0) - TBD
+
+### Changed
+
+* Bump MSRV to `1.85`
+* Bump Rust edition to `2024`
+
+
+
 ## [0.11.0](https://github.com/Blobfolio/dowser/releases/tag/v0.11.0) - 2024-12-10
 
 ### Changed

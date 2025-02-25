@@ -2,8 +2,8 @@
 name = "dowser"
 version = "0.11.0"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
-edition = "2021"
-rust-version = "1.83"
+edition = "2024"
+rust-version = "1.85"
 description = "A recursive, canonicalizing file finding library for Unix."
 license = "WTFPL"
 repository = "https://github.com/Blobfolio/dowser"
