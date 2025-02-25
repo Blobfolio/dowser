@@ -10,6 +10,8 @@
 
 ### Changed
 
+* Bump `brunch` to `0.9` (dev)
+* Bump `dactyl` to `0.10`
 * Bump MSRV to `1.85`
 * Bump Rust edition to `2024`
 
