@@ -12,7 +12,8 @@
 [`Dowser`] is a(nother) fast, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
 
 * It is not limited to one root; any number of file and directory paths can be loaded and traversed en masse;
-* Symlinks and hidden directories are followed like any other, including across devices;
+* Symlinks are followed by default, but can be disabled using [`Dowser::without_symlinks`];
+* Hidden paths and mount points are traversed like anything else;
 * Matching file paths are canonicalized and deduped before yielding;
 
 If those things sound nice, this library might be a good fit.
@@ -28,7 +29,7 @@ All you need to do is chain [`Dowser::default`] with one or more of the followin
 * [`Dowser::with_path`] / [`Dowser::with_paths`]
 * [`Dowser::without_path`] / [`Dowser::without_paths`]
 
-From there, you can apply any [`Iterator`](std::iter::Iterator) methods you want, or immediately collect the results using [`Dowser::into_vec`] or [`Dowser::into_vec_filtered`].
+From there, you can apply any [`Iterator`](std::iter::Iterator) methods you want.
 
 ```
 use dowser::Dowser;
@@ -39,13 +40,6 @@ let files1: Vec::<PathBuf> = Dowser::default()
     .with_path("/usr/share/man")
     .collect();
 
-// Same as above, but slightly faster.
-let files2: Vec::<PathBuf> = Dowser::default()
-    .with_path("/usr/share/man")
-    .into_vec();
-
-assert_eq!(files1.len(), files2.len());
-
 // Return only Gzipped files using callback filter.
 let files1: Vec::<PathBuf> = Dowser::default()
     .with_path("/usr/share/man")
@@ -53,15 +47,6 @@ let files1: Vec::<PathBuf> = Dowser::default()
         p.extension().is_some_and(|e| e.eq_ignore_ascii_case("gz"))
     )
     .collect();
-
-// Same as above, but slightly faster.
-let files2: Vec::<PathBuf> = Dowser::default()
-    .with_path("/usr/share/man")
-    .into_vec_filtered(|p|
-        p.extension().is_some_and(|e| e.eq_ignore_ascii_case("gz"))
-    );
-
-assert_eq!(files1.len(), files2.len());
 ```
 */
 

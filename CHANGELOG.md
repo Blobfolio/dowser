@@ -2,6 +2,26 @@
 
 
 
+## [0.12.0](https://github.com/Blobfolio/dowser/releases/tag/v0.12.0) - 2025-02-25
+
+### New
+
+* `Dowser::without_symlinks`
+
+### Changed
+
+* Bump `brunch` to `0.9` (dev)
+* Bump `dactyl` to `0.10`
+* Bump MSRV to `1.85`
+* Bump Rust edition to `2024`
+
+### Removed
+
+* `Dowser::into_vec` (use `collect` instead)
+* `Dowser::into_vec_filtered` (use `filter`+`collect` instead)
+
+
+
 ## [0.11.0](https://github.com/Blobfolio/dowser/releases/tag/v0.11.0) - 2024-12-10
 
 ### Changed
