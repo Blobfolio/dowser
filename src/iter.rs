@@ -135,13 +135,12 @@ impl Iterator for Dowser {
 			}
 
 			if let Some(p) = self.dirs.pop() {
-				if let Ok(rd) = std::fs::read_dir(p) {
-					for e in rd {
-						if let Some(e) = Entry::from_entry(e) {
-							if self.seen.insert(e.hash) {
-								if e.is_dir { self.dirs.push(e.path); }
-								else { self.files.push(e.path); }
-							}
+				let Ok(rd) = std::fs::read_dir(p) else { continue; };
+				for e in rd {
+					if let Some(e) = Entry::from_entry(e) {
+						if self.seen.insert(e.hash) {
+							if e.is_dir { self.dirs.push(e.path); }
+							else { self.files.push(e.path); }
 						}
 					}
 				}
@@ -377,22 +376,15 @@ impl Dowser {
 	pub fn into_vec(self) -> Vec<PathBuf> {
 		let Self { mut files, mut dirs, mut seen } = self;
 
-		if ! dirs.is_empty() {
-			loop {
-				for p in std::mem::take(&mut dirs) {
-					if let Ok(rd) = std::fs::read_dir(p) {
-						for e in rd {
-							if let Some(e) = Entry::from_entry(e) {
-								if seen.insert(e.hash) {
-									if e.is_dir { dirs.push(e.path); }
-									else { files.push(e.path); }
-								}
-							}
-						}
+		while let Some(p) = dirs.pop() {
+			let Ok(rd) = std::fs::read_dir(p) else { continue; };
+			for e in rd {
+				if let Some(e) = Entry::from_entry(e) {
+					if seen.insert(e.hash) {
+						if e.is_dir { dirs.push(e.path); }
+						else { files.push(e.path); }
 					}
 				}
-
-				if dirs.is_empty() { break; }
 			}
 		}
 
@@ -447,22 +439,15 @@ impl Dowser {
 		// We wouldn't have had a chance to filter these yet.
 		if ! files.is_empty() { files.retain(|p| cb(p)); }
 
-		if ! dirs.is_empty() {
-			loop {
-				for p in std::mem::take(&mut dirs) {
-					if let Ok(rd) = std::fs::read_dir(p) {
-						for e in rd {
-							if let Some(e) = Entry::from_entry(e) {
-								if seen.insert(e.hash) {
-									if e.is_dir { dirs.push(e.path); }
-									else if cb(&e.path) { files.push(e.path); }
-								}
-							}
-						}
+		while let Some(p) = dirs.pop() {
+			let Ok(rd) = std::fs::read_dir(p) else { continue; };
+			for e in rd {
+				if let Some(e) = Entry::from_entry(e) {
+					if seen.insert(e.hash) {
+						if e.is_dir { dirs.push(e.path); }
+						else if cb(&e.path) { files.push(e.path); }
 					}
 				}
-
-				if dirs.is_empty() { break; }
 			}
 		}
 
