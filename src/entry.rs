@@ -26,58 +26,38 @@ const AHASHER: ahash::RandomState = ahash::RandomState::with_seeds(
 
 
 /// # File Entry.
-///
-/// This holds a pre-computed hash, whether or not the path points to a
-/// directory, and the canonicalized path itself.
-pub(super) struct Entry {
-	/// # Path.
-	pub(super) path: PathBuf,
+pub(super) enum Entry {
+	/// # Directory.
+	Dir(PathBuf),
 
-	/// # Is Directory?
-	pub(super) is_dir: bool,
-
-	/// # Hash.
-	pub(super) hash: u64,
+	/// # File.
+	File(PathBuf),
 }
 
 impl Entry {
-	#[must_use]
-	/// # From Entry (Result).
-	///
-	/// Because [`Dowser`] canonicalizes all seed paths, we can assume that
-	/// any non-symlinked `DirEntry` is also canonical, thus avoiding expensive
-	/// syscalls.
-	///
-	/// If it is a symlink and symlinks are allowed, we'll canonicalize it
-	/// before processing. If symlinks aren't allowed, `None` is returned, duh.
+	#[expect(clippy::filetype_is_file, reason = "It's what we want.")]
+	/// # From `DirEntry` Result.
 	pub(super) fn from_entry(e: Result<DirEntry>, symlinks: bool) -> Option<Self> {
 		let e = e.ok()?;
 		let ft = e.file_type().ok()?;
-		if ft.is_symlink() {
-			// If this is a symlink, we have to follow it.
-			if symlinks { Self::from_path(e.path(), true) }
-			else { None } // Unless we're not supposed to.
+
+		// We can assume the path is canonical because the root we crawled to
+		// get this record was itself canonical.
+		if ft.is_dir() { Some(Self::Dir(e.path())) }
+		else if ft.is_file() { Some(Self::File(e.path())) }
+		// Except for symlinks, of course, which need to be followed if
+		// allowed…
+		else if symlinks {
+			let path = std::fs::canonicalize(e.path()).ok()?;
+			if path.is_dir() { Some(Self::Dir(path)) }
+			else { Some(Self::File(path)) }
 		}
-		else {
-			let path = e.path();
-			let hash = Self::hash_path(&path);
-			Some(Self {
-				path,
-				is_dir: ft.is_dir(),
-				hash,
-			})
-		}
+		// And ignored if not.
+		else { None }
 	}
 
-	#[must_use]
 	/// # From Path.
-	///
-	/// Paths sent to this method are untrusted and forced through
-	/// canonicalization before any metadata is worked out.
-	pub(super) fn from_path<P>(path: P, symlinks: bool) -> Option<Self>
-	where P: AsRef<Path> {
-		let path: &Path = path.as_ref();
-
+	pub(super) fn from_path(path: &Path, symlinks: bool) -> Option<Self> {
 		// If symlinks are to be avoided, we need to confirm the type before
 		// canonicalizing!
 		if ! symlinks {
@@ -85,11 +65,11 @@ impl Entry {
 			if meta.file_type().is_symlink() { return None; }
 		}
 
+		// Unassociated paths can be anything; we have to canonicalize to make
+		// sense of it.
 		let path = std::fs::canonicalize(path).ok()?;
-		let hash = Self::hash_path(&path);
-		let is_dir = path.is_dir();
-
-		Some(Self { path, is_dir, hash })
+		if path.is_dir() { Some(Self::Dir(path)) }
+		else { Some(Self::File(path)) }
 	}
 
 	#[cfg(unix)]
@@ -99,9 +79,9 @@ impl Entry {
 	///
 	/// Since all paths are canonical, we can test for uniqueness by simply
 	/// hashing them.
-	pub(super) fn hash_path(path: &Path) -> u64 {
+	pub(super) fn hash(&self) -> u64 {
 		use std::os::unix::ffi::OsStrExt;
-		AHASHER.hash_one(path.as_os_str().as_bytes())
+		AHASHER.hash_one(self.path().as_os_str().as_bytes())
 	}
 
 	#[cfg(not(unix))]
@@ -111,5 +91,13 @@ impl Entry {
 	///
 	/// Since all paths are canonical, we can test for uniqueness by simply
 	/// hashing them.
-	pub(super) fn hash_path(path: &Path) -> u64 { AHASHER.hash_one(path) }
+	pub(super) fn hash(&self) -> u64 { AHASHER.hash_one(self.path()) }
+
+	#[inline]
+	/// # Extract the Path.
+	fn path(&self) -> &Path {
+		match self {
+			Self::Dir(p) | Self::File(p) => p.as_path(),
+		}
+	}
 }

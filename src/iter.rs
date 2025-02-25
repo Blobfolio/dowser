@@ -99,9 +99,11 @@ impl From<&[PathBuf]> for Dowser {
 		let mut out = Self::default();
 
 		for e in src.iter().filter_map(|p| Entry::from_path(p, true)) {
-			if out.seen.insert(e.hash) {
-				if e.is_dir { out.dirs.push(e.path); }
-				else { out.files.push(e.path); }
+			if out.seen.insert(e.hash()) {
+				match e {
+					Entry::Dir(p) =>  { out.dirs.push(p); },
+					Entry::File(p) => { out.files.push(p); },
+				}
 			}
 		}
 
@@ -113,10 +115,12 @@ impl From<Vec<PathBuf>> for Dowser {
 	fn from(src: Vec<PathBuf>) -> Self {
 		let mut out = Self::default();
 
-		for e in src.into_iter().filter_map(|p| Entry::from_path(p, true)) {
-			if out.seen.insert(e.hash) {
-				if e.is_dir { out.dirs.push(e.path); }
-				else { out.files.push(e.path); }
+		for e in src.iter().filter_map(|p| Entry::from_path(p, true)) {
+			if out.seen.insert(e.hash()) {
+				match e {
+					Entry::Dir(p) =>  { out.dirs.push(p); },
+					Entry::File(p) => { out.files.push(p); },
+				}
 			}
 		}
 
@@ -144,9 +148,11 @@ impl Iterator for Dowser {
 				let Ok(rd) = std::fs::read_dir(p) else { continue; };
 				for e in rd {
 					if let Some(e) = Entry::from_entry(e, self.symlinks) {
-						if self.seen.insert(e.hash) {
-							if e.is_dir { self.dirs.push(e.path); }
-							else { self.files.push(e.path); }
+						if self.seen.insert(e.hash()) {
+							match e {
+								Entry::Dir(p) =>  { self.dirs.push(p); },
+								Entry::File(p) => { self.files.push(p); },
+							}
 						}
 					}
 				}
@@ -194,10 +200,12 @@ impl Dowser {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some(e) = Entry::from_path(path, self.symlinks) {
-			if self.seen.insert(e.hash) {
-				if e.is_dir { self.dirs.push(e.path); }
-				else { self.files.push(e.path); }
+		if let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) {
+			if self.seen.insert(e.hash()) {
+				match e {
+					Entry::Dir(p) =>  { self.dirs.push(p); },
+					Entry::File(p) => { self.files.push(p); },
+				}
 			}
 		}
 
@@ -270,10 +278,12 @@ impl Dowser {
 		for line in raw.lines() {
 			let line = line.trim();
 			if ! line.is_empty() {
-				if let Some(e) = Entry::from_path(line, self.symlinks) {
-					if self.seen.insert(e.hash) {
-						if e.is_dir { self.dirs.push(e.path); }
-						else { self.files.push(e.path); }
+				if let Some(e) = Entry::from_path(line.as_ref(), self.symlinks) {
+					if self.seen.insert(e.hash()) {
+						match e {
+							Entry::Dir(p) =>  { self.dirs.push(p); },
+							Entry::File(p) => { self.files.push(p); },
+						}
 					}
 				}
 			}
@@ -333,19 +343,9 @@ impl Dowser {
 	/// ```
 	pub fn without_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		let path: &Path = path.as_ref();
-
-		// Canonicalization might be conditional.
-		if
-			self.symlinks ||
-			std::fs::symlink_metadata(path).is_ok_and(|m| ! m.file_type().is_symlink())
-		{
-			if let Ok(p) = std::fs::canonicalize(path) {
-				let hash = Entry::hash_path(&p);
-				self.seen.insert(hash);
-			}
+		if let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) {
+			self.seen.insert(e.hash());
 		}
-
 
 		self
 	}
@@ -377,26 +377,13 @@ impl Dowser {
 	/// This will panic if you try to pass a single `Path` or `PathBuf` object
 	/// directly to this method (instead of a collection of same). Use
 	/// [`Dowser::without_path`] to add such an object directly.
-	pub fn without_paths<P, I>(mut self, paths: I) -> Self
+	pub fn without_paths<P, I>(self, paths: I) -> Self
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(! is_singular_path(&paths), "Dowser::without_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
-
-		if self.symlinks {
-			self.seen.extend(paths.into_iter().filter_map(|p|
-				std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
-			));
-		}
-		else {
-			self.seen.extend(paths.into_iter().filter_map(|p| {
-				let meta = std::fs::symlink_metadata(&p).ok()?;
-				if meta.file_type().is_symlink() { None }
-				else {
-					std::fs::canonicalize(p).ok().map(|p| Entry::hash_path(&p))
-				}
-			}));
-		}
-
-		self
+		assert!(
+			! is_singular_path(&paths),
+			"Dowser::without_paths requires an Iterator of paths, not a direct Path/PathBuf object.",
+		);
+		paths.into_iter().fold(self, Self::with_path)
 	}
 }
 
@@ -433,9 +420,11 @@ impl Dowser {
 			let Ok(rd) = std::fs::read_dir(p) else { continue; };
 			for e in rd {
 				if let Some(e) = Entry::from_entry(e, symlinks) {
-					if seen.insert(e.hash) {
-						if e.is_dir { dirs.push(e.path); }
-						else { files.push(e.path); }
+					if seen.insert(e.hash()) {
+						match e {
+							Entry::Dir(p) =>  { dirs.push(p); },
+							Entry::File(p) => { files.push(p); },
+						}
 					}
 				}
 			}
@@ -496,9 +485,12 @@ impl Dowser {
 			let Ok(rd) = std::fs::read_dir(p) else { continue; };
 			for e in rd {
 				if let Some(e) = Entry::from_entry(e, symlinks) {
-					if seen.insert(e.hash) {
-						if e.is_dir { dirs.push(e.path); }
-						else if cb(&e.path) { files.push(e.path); }
+					if seen.insert(e.hash()) {
+						match e {
+							Entry::Dir(p) =>  { dirs.push(p); },
+							Entry::File(p) =>
+								if cb(&p) { files.push(p); },
+						}
 					}
 				}
 			}
@@ -604,7 +596,7 @@ mod tests {
 		let trusting = {
 			let mut tmp: Vec<PathBuf> = raw.iter()
 				.filter_map(|p| Entry::from_path(p, true))
-				.map(|e| e.path)
+				.map(|e| match e { Entry::Dir(p) | Entry::File(p) => p })
 				.collect();
 			tmp.sort();
 			tmp.dedup();
