@@ -190,15 +190,7 @@ impl Dowser {
 	/// ```
 	pub fn with_path<P>(mut self, path: P) -> Self
 	where P: AsRef<Path> {
-		if let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) {
-			if self.seen.insert(e.hash()) {
-				match e {
-					Entry::Dir(p) =>  { self.dirs.push(p); },
-					Entry::File(p) => { self.files.push(p); },
-				}
-			}
-		}
-
+		self.push_path(path);
 		self
 	}
 
@@ -228,6 +220,36 @@ impl Dowser {
 	where P: AsRef<Path>, I: IntoIterator<Item=P> {
 		assert!(! is_singular_path(&paths), "Dowser::with_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
 		paths.into_iter().fold(self, Self::with_path)
+	}
+}
+
+impl Dowser {
+	/// # Push Path.
+	///
+	/// Queue up a single file or directory path.
+	///
+	/// See also [`Dowser::with_path`].
+	///
+	/// ## Examples
+	///
+	/// ```no_run
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let mut crawl = Dowser::default();
+	/// crawl.push_path("/my/dir");
+	/// let files: Vec::<PathBuf> = crawl.collect();
+	/// ```
+	pub fn push_path<P>(&mut self, path: P)
+	where P: AsRef<Path> {
+		if let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) {
+			if self.seen.insert(e.hash()) {
+				match e {
+					Entry::Dir(p) =>  { self.dirs.push(p); },
+					Entry::File(p) => { self.files.push(p); },
+				}
+			}
+		}
 	}
 }
 
