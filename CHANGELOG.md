@@ -2,6 +2,18 @@
 
 
 
+## [0.13.0](https://github.com/Blobfolio/dowser/releases/tag/v0.13.0) - TBD
+
+### New
+
+* `Dowser::push_path`
+
+### Changed
+
+* Bump `dowser` to `0.10` (dev)
+
+
+
 ## [0.12.0](https://github.com/Blobfolio/dowser/releases/tag/v0.12.0) - 2025-02-25
 
 ### New
