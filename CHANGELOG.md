@@ -2,6 +2,25 @@
 
 
 
+## [0.14.0](https://github.com/Blobfolio/dowser/releases/tag/v0.14.0) - 2025-05-29
+
+### Changed
+
+* Bump `dactyl` to `0.11`
+* Bump MSRV to `1.87`
+* Miscellaneous code cleanup and lints
+
+Most of the work this cycle relates to `Extension`:
+
+* `Extension::new2`/`Extension::new3`/`Extension::new4` now `debug_assert!` to help draw attention to incorrect usage
+* Explicitly require extensions be ASCII alphanumeric
+* Derive `Eq`/`PartialEq` (instead of implementing manually) so constants can be used as `matches!` patterns
+* `Extension::slice_ext` is now `const`
+* Change `Debug` impl to render inner value as human-readable string
+* Implement `Display`
+
+
+
 ## [0.13.0](https://github.com/Blobfolio/dowser/releases/tag/v0.13.0) - 2025-05-15
 
 ### New
@@ -10,7 +29,7 @@
 
 ### Changed
 
-* Bump `dowser` to `0.10` (dev)
+* Bump `brunch` to `0.10` (dev)
 
 
 

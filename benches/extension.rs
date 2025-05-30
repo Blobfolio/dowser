@@ -39,7 +39,7 @@ benches!(
 
 	Bench::spacer(),
 
-	Bench::new("dowser::Extension::slice_ext3(/usr/share/image.jpg)::eq(JPG)")
+	Bench::new("dowser::Extension::slice_ext3(/usr/share/image.jpg)")
 		.run(|| Extension::slice_ext3(b"/usr/share/image.jpg")),
 
 	Bench::new("dowser::Extension::slice_ext(/usr/share/image.jpg)")
