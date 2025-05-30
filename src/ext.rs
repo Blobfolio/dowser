@@ -7,6 +7,7 @@ use dactyl::{
 	NiceU32,
 };
 use std::{
+	fmt,
 	hash::{
 		Hash,
 		Hasher,
@@ -36,9 +37,16 @@ macro_rules! path_slice {
 	($path:ident) => ($path.as_ref().to_string_lossy().as_bytes());
 }
 
+/// # Lowercase Slice.
+///
+/// Shove a bunch of individual bytes into an array, lowercased.
+macro_rules! lowercase {
+	($($v:expr),+) => ([ $($v.to_ascii_lowercase()),+ ]);
+}
 
 
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+
+#[derive(Clone, Copy, Eq, PartialEq)]
 /// # Extension.
 ///
 /// This enum can be used to efficiently check a file path's extension case-
@@ -148,6 +156,163 @@ pub enum Extension {
 	Ext4(u32),
 }
 
+impl fmt::Debug for Extension {
+	#[expect(clippy::many_single_char_names, reason = "For consistency.")]
+	#[inline]
+	/// # Debug `Extension`.
+	///
+	/// This implementation yields the inner value as a readable string value,
+	/// unless invalid.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// assert_eq!(
+	///     format!("{:?}", Extension::new2(*b"gz")),
+	///     "Extension::Ext2(gz)",
+	/// );
+	/// assert_eq!(
+	///     format!("{:?}", Extension::new3(*b"png")),
+	///     "Extension::Ext3(png)",
+	/// );
+	/// assert_eq!(
+	///     format!("{:?}", Extension::new4(*b"html")),
+	///     "Extension::Ext4(html)",
+	/// );
+	///
+	/// // This is bad. Don't do this.
+	/// assert_eq!(
+	///     format!("{:?}", Extension::Ext2(0)),
+	///     "Extension::Ext2(�)",
+	/// );
+	///```
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let kind = match *self {
+			Self::Ext2(n) => {
+				let [a, b] = n.to_le_bytes();
+				if a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric() {
+					return write!(
+						f,
+						"Extension::Ext2({})",
+						std::str::from_utf8(&lowercase!(a, b))
+							.map_err(|_| fmt::Error)?
+					);
+				}
+				"Ext2"
+			},
+			Self::Ext3(n) => {
+				let [_, a, b, c] = n.to_le_bytes();
+				if
+					a.is_ascii_alphanumeric() &&
+					b.is_ascii_alphanumeric() &&
+					c.is_ascii_alphanumeric()
+				{
+					return write!(
+						f,
+						"Extension::Ext3({})",
+						std::str::from_utf8(&lowercase!(a, b, c))
+							.map_err(|_| fmt::Error)?
+					);
+				}
+				"Ext3"
+			},
+			Self::Ext4(n) => {
+				let [a, b, c, d] = n.to_le_bytes();
+				if
+					a.is_ascii_alphanumeric() &&
+					b.is_ascii_alphanumeric() &&
+					c.is_ascii_alphanumeric() &&
+					d.is_ascii_alphanumeric()
+				{
+					return write!(
+						f,
+						"Extension::Ext4({})",
+						std::str::from_utf8(&lowercase!(a, b, c, d))
+							.map_err(|_| fmt::Error)?
+					);
+				}
+				"Ext4"
+			},
+		};
+
+		write!(f, "Extension::{kind}({})", char::REPLACEMENT_CHARACTER)
+	}
+}
+
+impl fmt::Display for Extension {
+	#[expect(clippy::many_single_char_names, reason = "For consistency.")]
+	#[inline]
+	/// # Display `Extension`.
+	///
+	/// This prints only the extension part (minus the dot), unless invalid.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// assert_eq!(
+	///     Extension::new2(*b"gz").to_string(),
+	///     "gz",
+	/// );
+	/// assert_eq!(
+	///     Extension::new3(*b"png").to_string(),
+	///     "png",
+	/// );
+	/// assert_eq!(
+	///     Extension::new4(*b"html").to_string(),
+	///     "html",
+	/// );
+	///
+	/// // This is bad. Don't do this.
+	/// assert_eq!(
+	///     Extension::Ext2(0).to_string(),
+	///     char::REPLACEMENT_CHARACTER.to_string(),
+	/// );
+	///```
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match *self {
+			Self::Ext2(n) => {
+				let [a, b] = n.to_le_bytes();
+				if a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric() {
+					return std::str::from_utf8(&lowercase!(a, b))
+						.map_err(|_| fmt::Error)
+						.and_then(|n| f.write_str(n));
+				}
+			},
+			Self::Ext3(n) => {
+				let [_, a, b, c] = n.to_le_bytes();
+				if
+					a.is_ascii_alphanumeric() &&
+					b.is_ascii_alphanumeric() &&
+					c.is_ascii_alphanumeric()
+				{
+					return std::str::from_utf8(&lowercase!(a, b, c))
+						.map_err(|_| fmt::Error)
+						.and_then(|n| f.write_str(n));
+				}
+			},
+			Self::Ext4(n) => {
+				let [a, b, c, d] = n.to_le_bytes();
+				if
+					a.is_ascii_alphanumeric() &&
+					b.is_ascii_alphanumeric() &&
+					c.is_ascii_alphanumeric() &&
+					d.is_ascii_alphanumeric()
+				{
+					return std::str::from_utf8(&lowercase!(a, b, c, d))
+						.map_err(|_| fmt::Error)
+						.and_then(|n| f.write_str(n));
+				}
+			},
+		}
+
+		<char as fmt::Display>::fmt(&char::REPLACEMENT_CHARACTER, f)
+	}
+}
+
 impl Hash for Extension {
 	#[inline]
 	fn hash<H: Hasher>(&self, state: &mut H) {
@@ -173,7 +338,11 @@ where P: AsRef<Path> {
 	///
 	/// const MY_EXT: Extension = Extension::new4(*b"html");
 	///
+	/// // Yep!
 	/// assert_eq!(MY_EXT, "/path/to/index.html");
+	/// assert_eq!(MY_EXT, "/path/to/INDEX.HTML");
+	///
+	/// // Nope!
 	/// assert_ne!(MY_EXT, "/path/to/image.jpeg");
 	/// assert_ne!(MY_EXT, "/path/to/image.png");
 	/// assert_ne!(MY_EXT, "/path/to/image.tar.gz");
@@ -490,10 +659,7 @@ impl Extension {
 	pub const fn slice_ext2(path: &[u8]) -> Option<Self> {
 		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b] = path {
 			if a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric() {
-				Some(Self::Ext2(u16::from_le_bytes([
-					a.to_ascii_lowercase(),
-					b.to_ascii_lowercase(),
-				])))
+				Some(Self::Ext2(u16::from_le_bytes(lowercase!(a, b))))
 			}
 			else { None }
 		}
@@ -535,12 +701,7 @@ impl Extension {
 				b.is_ascii_alphanumeric() &&
 				c.is_ascii_alphanumeric()
 			{
-				Some(Self::Ext3(u32::from_le_bytes([
-					b'.',
-					a.to_ascii_lowercase(),
-					b.to_ascii_lowercase(),
-					c.to_ascii_lowercase(),
-				])))
+				Some(Self::Ext3(u32::from_le_bytes(lowercase!(b'.', a, b, c))))
 			}
 			else { None }
 		}
@@ -583,12 +744,7 @@ impl Extension {
 				c.is_ascii_alphanumeric() &&
 				d.is_ascii_alphanumeric()
 			{
-				Some(Self::Ext4(u32::from_le_bytes([
-					a.to_ascii_lowercase(),
-					b.to_ascii_lowercase(),
-					c.to_ascii_lowercase(),
-					d.to_ascii_lowercase(),
-				])))
+				Some(Self::Ext4(u32::from_le_bytes(lowercase!(a, b, c, d))))
 			}
 			else { None }
 		}
@@ -725,7 +881,6 @@ impl Extension {
 	///     f.write_all(out.as_bytes()).unwrap();
 	///     f.flush().unwrap();
 	/// }
-	///
 	/// ```
 	///
 	/// Then in your main program, say `lib.rs`, you'd toss an `include!()` to
@@ -763,10 +918,7 @@ impl Extension {
 			2 => [
 				"Extension::Ext2(",
 				NiceU16::with_separator(
-					u16::from_le_bytes([
-						src[0].to_ascii_lowercase(),
-						src[1].to_ascii_lowercase(),
-					]),
+					u16::from_le_bytes(lowercase!(src[0], src[1])),
 					b'_',
 				).as_str(),
 				"_u16)",
@@ -774,12 +926,7 @@ impl Extension {
 			3 => [
 				"Extension::Ext3(",
 				NiceU32::with_separator(
-					u32::from_le_bytes([
-						b'.',
-						src[0].to_ascii_lowercase(),
-						src[1].to_ascii_lowercase(),
-						src[2].to_ascii_lowercase(),
-					]),
+					u32::from_le_bytes(lowercase!(b'.', src[0], src[1], src[2])),
 					b'_',
 				).as_str(),
 				"_u32)",
@@ -787,12 +934,7 @@ impl Extension {
 			4 => [
 				"Extension::Ext4(",
 				NiceU32::with_separator(
-					u32::from_le_bytes([
-						src[0].to_ascii_lowercase(),
-						src[1].to_ascii_lowercase(),
-						src[2].to_ascii_lowercase(),
-						src[3].to_ascii_lowercase(),
-					]),
+					u32::from_le_bytes(lowercase!(src[0], src[1], src[2], src[3])),
 					b'_',
 				).as_str(),
 				"_u32)",
