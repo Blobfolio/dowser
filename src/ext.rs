@@ -214,6 +214,11 @@ impl Extension {
 	/// use dowser::Extension;
 	/// const MY_EXT: Extension = Extension::new2(*b"gz");
 	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic in debug builds if the extension is not lowercase
+	/// ASCII alphanumeric.
 	pub const fn new2(src: [u8; 2]) -> Self {
 		debug_assert!(
 			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
@@ -242,6 +247,11 @@ impl Extension {
 	/// use dowser::Extension;
 	/// const MY_EXT: Extension = Extension::new3(*b"gif");
 	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic in debug builds if the extension is not lowercase
+	/// ASCII alphanumeric.
 	pub const fn new3(src: [u8; 3]) -> Self {
 		debug_assert!(
 			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
@@ -271,6 +281,11 @@ impl Extension {
 	/// use dowser::Extension;
 	/// const MY_EXT: Extension = Extension::new4(*b"html");
 	/// ```
+	///
+	/// ## Panics
+	///
+	/// This will panic in debug builds if the extension is not lowercase
+	/// ASCII alphanumeric.
 	pub const fn new4(src: [u8; 4]) -> Self {
 		debug_assert!(
 			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
@@ -731,7 +746,10 @@ impl Extension {
 	pub fn codegen(mut src: &[u8]) -> String {
 		// Jump past the last period, if any.
 		if let Some(pos) = src.iter().rposition(|b| b'.'.eq(b)) {
-			assert!(pos + 2 < src.len(), "Extensions must be 2-4 bytes (not including punctuation).");
+			assert!(
+				pos + 2 < src.len(),
+				"Extensions must be 2-4 bytes (not including punctuation).",
+			);
 			src = &src[pos + 1..];
 		}
 
@@ -790,6 +808,27 @@ impl Extension {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	#[cfg_attr(debug_assertions, should_panic)]
+	/// # Bad New.
+	///
+	/// Should panic in debug builds, but not release ones.
+	fn t_new2_bad() { let _res = Extension::new2(*b"??"); }
+
+	#[test]
+	#[cfg_attr(debug_assertions, should_panic)]
+	/// # Bad New.
+	///
+	/// Should panic in debug builds, but not release ones.
+	fn t_new3_bad() { let _res = Extension::new3(*b"???"); }
+
+	#[test]
+	#[cfg_attr(debug_assertions, should_panic)]
+	/// # Bad New.
+	///
+	/// Should panic in debug builds, but not release ones.
+	fn t_new4_bad() { let _res = Extension::new4(*b"????"); }
 
 	#[test]
 	fn t_codegen() {
