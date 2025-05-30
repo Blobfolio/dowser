@@ -584,12 +584,12 @@ impl Extension {
 	/// # Slice Extension.
 	///
 	/// This returns the file extension portion of a path as a byte slice,
-	/// similar to [`std::path::Path::extension`], but faster since it is dealing with
-	/// straight bytes.
+	/// similar to [`std::path::Path::extension`], but faster (and constant)
+	/// since it is dealing with straight bytes.
 	///
 	/// The extension is found by jumping to the last period, ensuring the byte
 	/// _before_ that period is not a path separator, and that there are one or
-	/// more bytes _after_ that period (none of which are path separators).
+	/// more ASCII alphanumeric bytes _after_ that period.
 	///
 	/// If the above are all good, a slice containing everything after that
 	/// last period is returned.
@@ -611,6 +611,16 @@ impl Extension {
 	///     Some(&b"docx"[..])
 	/// );
 	///
+	/// // Sizes not otherwise supported by `Extension` can be returned.
+	/// assert_eq!(
+	///     Extension::slice_ext(b"/usr/share/man/foo.1"),
+	///     Some(&b"1"[..])
+	/// );
+	/// assert_eq!(
+	///     Extension::slice_ext(b"firefox.desktop"),
+	///     Some(&b"desktop"[..])
+	/// );
+	///
 	/// // These are all bad, though:
 	/// assert_eq!(
 	///     Extension::slice_ext(b"/path/to/.hide"),
@@ -625,17 +635,21 @@ impl Extension {
 	///     None
 	/// );
 	/// ```
-	pub fn slice_ext(src: &[u8]) -> Option<&[u8]> {
-		let dot = src.iter().rposition(|&b| matches!(b, b'.' | b'/' | b'\\'))?;
+	pub const fn slice_ext(src: &[u8]) -> Option<&[u8]> {
+		// Cut ASCII alphanumerics from the end of the slice.
+		let mut stub = src;
+		while let [ rest @ .., b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' ] = stub {
+			stub = rest;
+		}
 
 		if
-			0 < dot &&
-			dot + 1 < src.len() &&
-			src[dot] == b'.' &&
-			// Safety: we tested 0 < dot, so the subtraction won't overflow.
-			! matches!(src[dot - 1], b'/' | b'\\')
+			// Extension half is non-empty.
+			stub.len() < src.len() &&
+			// The stub has a file name and dot at the end.
+			matches!(stub, [ .., 0..=46 | 48..=91 | 93..=255, b'.' ])
 		{
-			Some(&src[dot + 1..])
+			let (_, out) = src.split_at(stub.len());
+			Some(out)
 		}
 		else { None }
 	}

@@ -8,7 +8,11 @@
 
 * Bump `dactyl` to `0.11`
 * Bump MSRV to `1.87`
-* Use `#[derive(Eq, PartialEq)]` (instead of manual impl) for `Extension` so constants can be used in `matches!` patterns
+* Add debug assertions to `Extension::new2`/`Extension::new3`/`Extension::new4` to draw attention to accidental misuse
+* `Extension` now explicitly requires values be ASCII alphanumeric.
+* Derive `Eq`/`PartialEq` for `Extension` (instead of implementing manually) so constants can be used as `matches!` patterns
+* `Extension::slice_ext` is now `const`
+* Miscellaneous code cleanup and lints
 
 
 
