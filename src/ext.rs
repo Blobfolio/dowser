@@ -37,6 +37,16 @@ macro_rules! path_slice {
 	($path:ident) => ($path.as_ref().to_string_lossy().as_bytes());
 }
 
+/// # Is ASCII alphanumeric?
+///
+/// Build a condition containing one or more value.
+macro_rules! is_ascii_alphanumeric {
+	($v1:expr) => ($v1.is_ascii_alphanumeric());
+	($v1:expr, $($v2:expr),+) => (
+		$v1.is_ascii_alphanumeric() && is_ascii_alphanumeric!($($v2),+)
+	);
+}
+
 /// # Lowercase Slice.
 ///
 /// Shove a bunch of individual bytes into an array, lowercased.
@@ -192,7 +202,7 @@ impl fmt::Debug for Extension {
 		let kind = match *self {
 			Self::Ext2(n) => {
 				let [a, b] = n.to_le_bytes();
-				if a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric() {
+				if is_ascii_alphanumeric!(a, b) {
 					return write!(
 						f,
 						"Extension::Ext2({})",
@@ -204,11 +214,7 @@ impl fmt::Debug for Extension {
 			},
 			Self::Ext3(n) => {
 				let [_, a, b, c] = n.to_le_bytes();
-				if
-					a.is_ascii_alphanumeric() &&
-					b.is_ascii_alphanumeric() &&
-					c.is_ascii_alphanumeric()
-				{
+				if is_ascii_alphanumeric!(a, b, c) {
 					return write!(
 						f,
 						"Extension::Ext3({})",
@@ -220,12 +226,7 @@ impl fmt::Debug for Extension {
 			},
 			Self::Ext4(n) => {
 				let [a, b, c, d] = n.to_le_bytes();
-				if
-					a.is_ascii_alphanumeric() &&
-					b.is_ascii_alphanumeric() &&
-					c.is_ascii_alphanumeric() &&
-					d.is_ascii_alphanumeric()
-				{
+				if is_ascii_alphanumeric!(a, b, c, d) {
 					return write!(
 						f,
 						"Extension::Ext4({})",
@@ -276,7 +277,7 @@ impl fmt::Display for Extension {
 		match *self {
 			Self::Ext2(n) => {
 				let [a, b] = n.to_le_bytes();
-				if a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric() {
+				if is_ascii_alphanumeric!(a, b) {
 					return std::str::from_utf8(&lowercase!(a, b))
 						.map_err(|_| fmt::Error)
 						.and_then(|n| f.write_str(n));
@@ -284,11 +285,7 @@ impl fmt::Display for Extension {
 			},
 			Self::Ext3(n) => {
 				let [_, a, b, c] = n.to_le_bytes();
-				if
-					a.is_ascii_alphanumeric() &&
-					b.is_ascii_alphanumeric() &&
-					c.is_ascii_alphanumeric()
-				{
+				if is_ascii_alphanumeric!(a, b, c) {
 					return std::str::from_utf8(&lowercase!(a, b, c))
 						.map_err(|_| fmt::Error)
 						.and_then(|n| f.write_str(n));
@@ -296,12 +293,7 @@ impl fmt::Display for Extension {
 			},
 			Self::Ext4(n) => {
 				let [a, b, c, d] = n.to_le_bytes();
-				if
-					a.is_ascii_alphanumeric() &&
-					b.is_ascii_alphanumeric() &&
-					c.is_ascii_alphanumeric() &&
-					d.is_ascii_alphanumeric()
-				{
+				if is_ascii_alphanumeric!(a, b, c, d) {
 					return std::str::from_utf8(&lowercase!(a, b, c, d))
 						.map_err(|_| fmt::Error)
 						.and_then(|n| f.write_str(n));
@@ -658,7 +650,7 @@ impl Extension {
 	/// ```
 	pub const fn slice_ext2(path: &[u8]) -> Option<Self> {
 		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b] = path {
-			if a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric() {
+			if is_ascii_alphanumeric!(a, b) {
 				Some(Self::Ext2(u16::from_le_bytes(lowercase!(a, b))))
 			}
 			else { None }
@@ -696,11 +688,7 @@ impl Extension {
 	/// ```
 	pub const fn slice_ext3(path: &[u8]) -> Option<Self> {
 		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c] = path {
-			if
-				a.is_ascii_alphanumeric() &&
-				b.is_ascii_alphanumeric() &&
-				c.is_ascii_alphanumeric()
-			{
+			if is_ascii_alphanumeric!(a, b, c) {
 				Some(Self::Ext3(u32::from_le_bytes(lowercase!(b'.', a, b, c))))
 			}
 			else { None }
@@ -738,12 +726,7 @@ impl Extension {
 	/// ```
 	pub const fn slice_ext4(path: &[u8]) -> Option<Self> {
 		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c, d] = path {
-			if
-				a.is_ascii_alphanumeric() &&
-				b.is_ascii_alphanumeric() &&
-				c.is_ascii_alphanumeric() &&
-				d.is_ascii_alphanumeric()
-			{
+			if is_ascii_alphanumeric!(a, b, c, d) {
 				Some(Self::Ext4(u32::from_le_bytes(lowercase!(a, b, c, d))))
 			}
 			else { None }
@@ -946,31 +929,61 @@ impl Extension {
 
 
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	#[test]
-	#[cfg_attr(debug_assertions, should_panic)]
-	/// # Bad New.
-	///
-	/// Should panic in debug builds, but not release ones.
-	fn t_new2_bad() { let _res = Extension::new2(*b"??"); }
+	/// # Triple Check our is_ascii_alphanumeric! macro.
+	fn t_is_ascii_alphanumeric() {
+		assert!(is_ascii_alphanumeric!(b'a'));
+		assert!(is_ascii_alphanumeric!(b'a', b'b', b'c', b'd'));
+
+		assert!(! is_ascii_alphanumeric!(b'?'));
+		assert!(! is_ascii_alphanumeric!(b'a', b'.', b'c', b'd'));
+	}
 
 	#[test]
 	#[cfg_attr(debug_assertions, should_panic)]
 	/// # Bad New.
 	///
 	/// Should panic in debug builds, but not release ones.
-	fn t_new3_bad() { let _res = Extension::new3(*b"???"); }
+	fn t_new2_bad1() { let _res = Extension::new2(*b"??"); }
 
 	#[test]
 	#[cfg_attr(debug_assertions, should_panic)]
 	/// # Bad New.
 	///
 	/// Should panic in debug builds, but not release ones.
-	fn t_new4_bad() { let _res = Extension::new4(*b"????"); }
+	fn t_new3_bad1() { let _res = Extension::new3(*b"???"); }
+
+	#[test]
+	#[cfg_attr(debug_assertions, should_panic)]
+	/// # Bad New.
+	///
+	/// Should panic in debug builds, but not release ones.
+	fn t_new4_bad1() { let _res = Extension::new4(*b"????"); }
+
+	#[test]
+	#[cfg_attr(debug_assertions, should_panic)]
+	/// # Bad New.
+	///
+	/// Should panic in debug builds, but not release ones.
+	fn t_new2_bad2() { let _res = Extension::new2(*b"AB"); }
+
+	#[test]
+	#[cfg_attr(debug_assertions, should_panic)]
+	/// # Bad New.
+	///
+	/// Should panic in debug builds, but not release ones.
+	fn t_new3_bad2() { let _res = Extension::new3(*b"ABC"); }
+
+	#[test]
+	#[cfg_attr(debug_assertions, should_panic)]
+	/// # Bad New.
+	///
+	/// Should panic in debug builds, but not release ones.
+	fn t_new4_bad2() { let _res = Extension::new4(*b"ABCD"); }
 
 	#[test]
 	fn t_codegen() {
