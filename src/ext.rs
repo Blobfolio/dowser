@@ -474,10 +474,13 @@ impl Extension {
 	/// ```
 	pub const fn slice_ext2(path: &[u8]) -> Option<Self> {
 		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b] = path {
-			Some(Self::Ext2(u16::from_le_bytes([
-				a.to_ascii_lowercase(),
-				b.to_ascii_lowercase(),
-			])))
+			if a.is_ascii_alphanumeric() && b.is_ascii_alphanumeric() {
+				Some(Self::Ext2(u16::from_le_bytes([
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+				])))
+			}
+			else { None }
 		}
 		else { None }
 	}
@@ -512,12 +515,19 @@ impl Extension {
 	/// ```
 	pub const fn slice_ext3(path: &[u8]) -> Option<Self> {
 		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c] = path {
-			Some(Self::Ext3(u32::from_le_bytes([
-				b'.',
-				a.to_ascii_lowercase(),
-				b.to_ascii_lowercase(),
-				c.to_ascii_lowercase(),
-			])))
+			if
+				a.is_ascii_alphanumeric() &&
+				b.is_ascii_alphanumeric() &&
+				c.is_ascii_alphanumeric()
+			{
+				Some(Self::Ext3(u32::from_le_bytes([
+					b'.',
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+					c.to_ascii_lowercase(),
+				])))
+			}
+			else { None }
 		}
 		else { None }
 	}
@@ -552,12 +562,20 @@ impl Extension {
 	/// ```
 	pub const fn slice_ext4(path: &[u8]) -> Option<Self> {
 		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c, d] = path {
-			Some(Self::Ext4(u32::from_le_bytes([
-				a.to_ascii_lowercase(),
-				b.to_ascii_lowercase(),
-				c.to_ascii_lowercase(),
-				d.to_ascii_lowercase(),
-			])))
+			if
+				a.is_ascii_alphanumeric() &&
+				b.is_ascii_alphanumeric() &&
+				c.is_ascii_alphanumeric() &&
+				d.is_ascii_alphanumeric()
+			{
+				Some(Self::Ext4(u32::from_le_bytes([
+					a.to_ascii_lowercase(),
+					b.to_ascii_lowercase(),
+					c.to_ascii_lowercase(),
+					d.to_ascii_lowercase(),
+				])))
+			}
+			else { None }
 		}
 		else { None }
 	}
@@ -703,10 +721,10 @@ impl Extension {
 			src = &src[pos + 1..];
 		}
 
-		// Make sure there is no whitespace.
+		// Make sure it's ASCII alphabetic.
 		assert!(
-			src.iter().all(|b| ! b.is_ascii_whitespace() && b'/'.ne(b) && b'\\'.ne(b)),
-			"Extensions cannot contain whitespace or path separators."
+			src.iter().all(u8::is_ascii_alphanumeric),
+			"Extensions must be ASCII alphanumeric."
 		);
 
 		match src.len() {
