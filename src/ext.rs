@@ -215,6 +215,11 @@ impl Extension {
 	/// const MY_EXT: Extension = Extension::new2(*b"gz");
 	/// ```
 	pub const fn new2(src: [u8; 2]) -> Self {
+		debug_assert!(
+			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
+			matches!(src[1], b'0'..=b'9' | b'a'..=b'z'),
+			"`Extension` must be lowercase, ASCII alphanumeric.",
+		);
 		Self::Ext2(u16::from_le_bytes(src))
 	}
 
@@ -238,6 +243,12 @@ impl Extension {
 	/// const MY_EXT: Extension = Extension::new3(*b"gif");
 	/// ```
 	pub const fn new3(src: [u8; 3]) -> Self {
+		debug_assert!(
+			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
+			matches!(src[1], b'0'..=b'9' | b'a'..=b'z') &&
+			matches!(src[2], b'0'..=b'9' | b'a'..=b'z'),
+			"`Extension` must be lowercase, ASCII alphanumeric.",
+		);
 		Self::Ext3(u32::from_le_bytes([b'.', src[0], src[1], src[2]]))
 	}
 
@@ -261,6 +272,13 @@ impl Extension {
 	/// const MY_EXT: Extension = Extension::new4(*b"html");
 	/// ```
 	pub const fn new4(src: [u8; 4]) -> Self {
+		debug_assert!(
+			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
+			matches!(src[1], b'0'..=b'9' | b'a'..=b'z') &&
+			matches!(src[2], b'0'..=b'9' | b'a'..=b'z') &&
+			matches!(src[3], b'0'..=b'9' | b'a'..=b'z'),
+			"`Extension` must be lowercase, ASCII alphanumeric.",
+		);
 		Self::Ext4(u32::from_le_bytes(src))
 	}
 }
