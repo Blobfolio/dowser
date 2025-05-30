@@ -2,6 +2,16 @@
 
 
 
+## [0.14.0](https://github.com/Blobfolio/dowser/releases/tag/v0.14.0) - 2025-05-29
+
+### Changed
+
+* Bump `dactyl` to `0.11`
+* Bump MSRV to `1.87`
+* Use `#[derive(Eq, PartialEq)]` (instead of manual impl) for `Extension` so constants can be used in `matches!` patterns
+
+
+
 ## [0.13.0](https://github.com/Blobfolio/dowser/releases/tag/v0.13.0) - 2025-05-15
 
 ### New
@@ -10,7 +20,7 @@
 
 ### Changed
 
-* Bump `dowser` to `0.10` (dev)
+* Bump `brunch` to `0.10` (dev)
 
 
 

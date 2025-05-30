@@ -38,7 +38,7 @@ macro_rules! path_slice {
 
 
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 /// # Extension.
 ///
 /// This enum can be used to efficiently check a file path's extension case-
@@ -148,26 +148,12 @@ pub enum Extension {
 	Ext4(u32),
 }
 
-impl Eq for Extension {}
-
 impl Hash for Extension {
 	#[inline]
 	fn hash<H: Hasher>(&self, state: &mut H) {
 		match *self {
 			Self::Ext2(n) => { state.write_u16(n); },
 			Self::Ext3(n) | Self::Ext4(n) => { state.write_u32(n); },
-		}
-	}
-}
-
-impl PartialEq for Extension {
-	#[inline]
-	fn eq(&self, other: &Self) -> bool {
-		match (*self, *other) {
-			(Self::Ext2(e1), Self::Ext2(e2)) => e1 == e2,
-			(Self::Ext3(e1), Self::Ext3(e2)) |
-			(Self::Ext4(e1), Self::Ext4(e2)) => e1 == e2,
-			_ => false,
 		}
 	}
 }
@@ -213,7 +199,7 @@ impl Extension {
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
 	///
-	/// For compile-time generation, see [`Extension::codegen`].
+	/// For (checked) compile-time generation, see [`Extension::codegen`].
 	///
 	/// ## Examples
 	///
@@ -236,7 +222,7 @@ impl Extension {
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
 	///
-	/// For compile-time generation, see [`Extension::codegen`].
+	/// For (checked) compile-time generation, see [`Extension::codegen`].
 	///
 	/// ## Examples
 	///
@@ -259,7 +245,7 @@ impl Extension {
 	/// unknown values against. Sanity-checking is traded for performance, but
 	/// you're only hurting yourself if you misuse it.
 	///
-	/// For compile-time generation, see [`Extension::codegen`].
+	/// For (checked) compile-time generation, see [`Extension::codegen`].
 	///
 	/// ## Examples
 	///
@@ -292,11 +278,34 @@ impl Extension {
 	/// use dowser::Extension;
 	///
 	/// const MY_EXT: Extension = Extension::new2(*b"gz");
-	/// assert_eq!(Extension::try_from2("/path/to/file.gz"), Some(MY_EXT));
-	/// assert_eq!(Extension::try_from2("/path/to/file.GZ"), Some(MY_EXT));
 	///
-	/// assert_eq!(Extension::try_from2("/path/to/file.png"), None);
-	/// assert_ne!(Extension::try_from2("/path/to/file.br"), Some(MY_EXT));
+	/// // Case doesn't matter.
+	/// assert_eq!(
+	///     Extension::try_from2("/path/to/file.tar.gz"),
+	///     Some(MY_EXT),
+	/// );
+	/// assert_eq!(
+	///     Extension::try_from2("/path/to/file.tar.GZ"),
+	///     Some(MY_EXT),
+	/// );
+	///
+	/// // With a constant, matches! works too.
+	/// assert!(matches!(
+	///     Extension::try_from2("/path/to/file.tar.gz"),
+	///     Some(MY_EXT),
+	/// ));
+	///
+	/// // Three is not two.
+	/// assert_eq!(
+	///     Extension::try_from2("/path/to/file.png"),
+	///     None,
+	/// );
+	///
+	/// // Two is two, but a different two from MY_EXT.
+	/// assert_eq!(
+	///     Extension::try_from2("/path/to/file.BR"),
+	///     Some(Extension::new2(*b"br")),
+	/// );
 	/// ```
 	pub fn try_from2<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
@@ -321,11 +330,34 @@ impl Extension {
 	/// use dowser::Extension;
 	///
 	/// const MY_EXT: Extension = Extension::new3(*b"png");
-	/// assert_eq!(Extension::try_from3("/path/to/file.png"), Some(MY_EXT));
-	/// assert_eq!(Extension::try_from3("/path/to/FILE.PNG"), Some(MY_EXT));
 	///
-	/// assert_eq!(Extension::try_from3("/path/to/file.html"), None);
-	/// assert_ne!(Extension::try_from3("/path/to/file.jpg"), Some(MY_EXT));
+	/// // Case doesn't matter.
+	/// assert_eq!(
+	///     Extension::try_from3("/path/to/file.png"),
+	///     Some(MY_EXT),
+	/// );
+	/// assert_eq!(
+	///     Extension::try_from3("/path/to/FILE.PNG"),
+	///     Some(MY_EXT),
+	/// );
+	///
+	/// // With a constant, matches! works too.
+	/// assert!(matches!(
+	///     Extension::try_from3("/path/to/file.png"),
+	///     Some(MY_EXT),
+	/// ));
+	///
+	/// // Four is not three.
+	/// assert_eq!(
+	///     Extension::try_from3("/path/to/file.html"),
+	///     None,
+	/// );
+	///
+	/// // Three is three, but a different three from MY_EXT.
+	/// assert_eq!(
+	///     Extension::try_from3("/path/to/file.jpg"),
+	///     Some(Extension::new3(*b"jpg")),
+	/// );
 	/// ```
 	pub fn try_from3<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
@@ -350,11 +382,34 @@ impl Extension {
 	/// use dowser::Extension;
 	///
 	/// const MY_EXT: Extension = Extension::new4(*b"html");
-	/// assert_eq!(Extension::try_from4("/path/to/file.html"), Some(MY_EXT));
-	/// assert_eq!(Extension::try_from4("/path/to/FILE.HTML"), Some(MY_EXT));
 	///
-	/// assert_eq!(Extension::try_from4("/path/to/file.png"), None);
-	/// assert_ne!(Extension::try_from4("/path/to/file.xhtm"), Some(MY_EXT));
+	/// // Case doesn't matter.
+	/// assert_eq!(
+	///     Extension::try_from4("/path/to/file.html"),
+	///     Some(MY_EXT),
+	/// );
+	/// assert_eq!(
+	///     Extension::try_from4("/path/to/FILE.HTML"),
+	///     Some(MY_EXT),
+	/// );
+	///
+	/// // With a constant, matches! works too.
+	/// assert!(matches!(
+	///     Extension::try_from4("/path/to/file.html"),
+	///     Some(MY_EXT),
+	/// ));
+	///
+	/// // Three is not four.
+	/// assert_eq!(
+	///     Extension::try_from4("/path/to/file.png"),
+	///     None,
+	/// );
+	///
+	/// // Four is four, but a different four from MY_EXT.
+	/// assert_eq!(
+	///     Extension::try_from4("/path/to/file.xhtm"),
+	///     Some(Extension::new4(*b"xhtm")),
+	/// );
 	/// ```
 	pub fn try_from4<P>(path: P) -> Option<Self>
 	where P: AsRef<Path> {
