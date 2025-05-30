@@ -175,14 +175,21 @@ where P: AsRef<Path> {
 	///
 	/// assert_eq!(MY_EXT, "/path/to/index.html");
 	/// assert_ne!(MY_EXT, "/path/to/image.jpeg");
+	/// assert_ne!(MY_EXT, "/path/to/image.png");
+	/// assert_ne!(MY_EXT, "/path/to/image.tar.gz");
 	/// ```
 	fn eq(&self, other: &P) -> bool {
-		match self {
-			Self::Ext2(_) => Self::try_from2(other),
-			Self::Ext3(_) => Self::try_from3(other),
-			Self::Ext4(_) => Self::try_from4(other),
+		match *self {
+			Self::Ext2(n1) =>
+				if let Some(Self::Ext2(n2)) = Self::try_from2(other) { n1 == n2 }
+				else { false },
+			Self::Ext3(n1) =>
+				if let Some(Self::Ext3(n2)) = Self::try_from3(other) { n1 == n2 }
+				else { false },
+			Self::Ext4(n1) =>
+				if let Some(Self::Ext4(n2)) = Self::try_from4(other) { n1 == n2 }
+				else { false },
 		}
-			.is_some_and(|e| e.eq(self))
 	}
 }
 
