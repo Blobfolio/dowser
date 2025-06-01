@@ -25,7 +25,7 @@ On the other hand, `Dowser` is optimized for _file_ searching; the iterator craw
 
 Add `dowser` to your `dependencies` in `Cargo.toml`, like:
 
-```
+```toml
 [dependencies]
 dowser = "0.12.*"
 ```

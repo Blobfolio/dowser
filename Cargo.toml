@@ -1,6 +1,6 @@
 [package]
 name = "dowser"
-version = "0.14.0"
+version = "0.14.1"
 authors = ["Josh Stoik <josh@blobfolio.com>"]
 edition = "2024"
 rust-version = "1.87"
@@ -26,7 +26,7 @@ default-target = "x86_64-unknown-linux-gnu"
 name = "Dowser"
 
 [dependencies]
-dactyl = "0.11.*"
+dactyl = "0.12.*"
 
 [dependencies.ahash]
 version = "0.8.*"

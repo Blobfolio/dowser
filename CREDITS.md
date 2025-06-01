@@ -1,13 +1,13 @@
 # Project Dependencies
     Package:   dowser
-    Version:   0.14.0
-    Generated: 2025-05-30 07:03:10 UTC
+    Version:   0.14.1
+    Generated: 2025-06-01 06:24:14 UTC
 
 | Package | Version | Author(s) | License |
 | ---- | ---- | ---- | ---- |
 | [**ahash**](https://github.com/tkaitchuck/ahash) | 0.8.12 | [Tom Kaitchuck](mailto:tom.kaitchuck@gmail.com) | MIT OR Apache-2.0 |
 | [cfg-if](https://github.com/alexcrichton/cfg-if) | 1.0.0 | [Alex Crichton](mailto:alex@alexcrichton.com) | MIT OR Apache-2.0 |
-| [**dactyl**](https://github.com/Blobfolio/dactyl) | 0.11.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
+| [**dactyl**](https://github.com/Blobfolio/dactyl) | 0.12.0 | [Josh Stoik](mailto:josh@blobfolio.com) | WTFPL |
 | [version_check](https://github.com/SergioBenitez/version_check) ⚒️ | 0.9.5 | [Sergio Benitez](mailto:sb@sergio.bz) | MIT OR Apache-2.0 |
 | [zerocopy](https://github.com/google/zerocopy) | 0.8.25 | [Joshua Liebow-Feeser](mailto:joshlf@google.com) and [Jack Wrenn](mailto:jswrenn@amazon.com) | BSD-2-Clause OR Apache-2.0 OR MIT |
 | [zerocopy-derive](https://github.com/google/zerocopy) | 0.8.25 | [Joshua Liebow-Feeser](mailto:joshlf@google.com) and [Jack Wrenn](mailto:jswrenn@amazon.com) | BSD-2-Clause OR Apache-2.0 OR MIT |
