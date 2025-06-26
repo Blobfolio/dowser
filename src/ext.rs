@@ -5,6 +5,7 @@
 use dactyl::{
 	NiceU16,
 	NiceU32,
+	NiceSeparator,
 };
 use std::{
 	fmt,
@@ -649,11 +650,11 @@ impl Extension {
 	/// assert_ne!(Extension::slice_ext2(b"/path/to/file.br"), Some(MY_EXT));
 	/// ```
 	pub const fn slice_ext2(path: &[u8]) -> Option<Self> {
-		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b] = path {
-			if is_ascii_alphanumeric!(a, b) {
-				Some(Self::Ext2(u16::from_le_bytes(lowercase!(a, b))))
-			}
-			else { None }
+		if
+			let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b] = path &&
+			is_ascii_alphanumeric!(a, b)
+		{
+			Some(Self::Ext2(u16::from_le_bytes(lowercase!(a, b))))
 		}
 		else { None }
 	}
@@ -687,11 +688,11 @@ impl Extension {
 	/// assert_ne!(Extension::slice_ext3(b"/path/to/file.jpg"), Some(MY_EXT));
 	/// ```
 	pub const fn slice_ext3(path: &[u8]) -> Option<Self> {
-		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c] = path {
-			if is_ascii_alphanumeric!(a, b, c) {
-				Some(Self::Ext3(u32::from_le_bytes(lowercase!(b'.', a, b, c))))
-			}
-			else { None }
+		if
+			let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c] = path &&
+			is_ascii_alphanumeric!(a, b, c)
+		{
+			Some(Self::Ext3(u32::from_le_bytes(lowercase!(b'.', a, b, c))))
 		}
 		else { None }
 	}
@@ -725,11 +726,11 @@ impl Extension {
 	/// assert_ne!(Extension::slice_ext4(b"/path/to/file.xhtm"), Some(MY_EXT));
 	/// ```
 	pub const fn slice_ext4(path: &[u8]) -> Option<Self> {
-		if let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c, d] = path {
-			if is_ascii_alphanumeric!(a, b, c, d) {
-				Some(Self::Ext4(u32::from_le_bytes(lowercase!(a, b, c, d))))
-			}
-			else { None }
+		if
+			let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c, d] = path &&
+			is_ascii_alphanumeric!(a, b, c, d)
+		{
+			Some(Self::Ext4(u32::from_le_bytes(lowercase!(a, b, c, d))))
 		}
 		else { None }
 	}
@@ -902,7 +903,7 @@ impl Extension {
 				"Extension::Ext2(",
 				NiceU16::with_separator(
 					u16::from_le_bytes(lowercase!(src[0], src[1])),
-					b'_',
+					NiceSeparator::Underscore,
 				).as_str(),
 				"_u16)",
 			].concat(),
@@ -910,7 +911,7 @@ impl Extension {
 				"Extension::Ext3(",
 				NiceU32::with_separator(
 					u32::from_le_bytes(lowercase!(b'.', src[0], src[1], src[2])),
-					b'_',
+					NiceSeparator::Underscore,
 				).as_str(),
 				"_u32)",
 			].concat(),
@@ -918,7 +919,7 @@ impl Extension {
 				"Extension::Ext4(",
 				NiceU32::with_separator(
 					u32::from_le_bytes(lowercase!(src[0], src[1], src[2], src[3])),
-					b'_',
+					NiceSeparator::Underscore,
 				).as_str(),
 				"_u32)",
 			].concat(),

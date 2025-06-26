@@ -145,12 +145,13 @@ impl Iterator for Dowser {
 			let p = self.dirs.pop()?;
 			let Ok(rd) = std::fs::read_dir(p) else { continue; };
 			for e in rd {
-				if let Some(e) = Entry::from_entry(e, self.symlinks) {
-					if self.seen.insert(e.hash()) {
-						match e {
-							Entry::Dir(p) =>  { self.dirs.push(p); },
-							Entry::File(p) => { self.files.push(p); },
-						}
+				if
+					let Some(e) = Entry::from_entry(e, self.symlinks) &&
+					self.seen.insert(e.hash())
+				{
+					match e {
+						Entry::Dir(p) =>  { self.dirs.push(p); },
+						Entry::File(p) => { self.files.push(p); },
 					}
 				}
 			}
@@ -242,12 +243,13 @@ impl Dowser {
 	/// ```
 	pub fn push_path<P>(&mut self, path: P)
 	where P: AsRef<Path> {
-		if let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) {
-			if self.seen.insert(e.hash()) {
-				match e {
-					Entry::Dir(p) =>  { self.dirs.push(p); },
-					Entry::File(p) => { self.files.push(p); },
-				}
+		if
+			let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) &&
+			self.seen.insert(e.hash())
+		{
+			match e {
+				Entry::Dir(p) =>  { self.dirs.push(p); },
+				Entry::File(p) => { self.files.push(p); },
 			}
 		}
 	}
@@ -289,14 +291,14 @@ impl Dowser {
 		let raw = std::fs::read_to_string(src)?;
 		for line in raw.lines() {
 			let line = line.trim();
-			if ! line.is_empty() {
-				if let Some(e) = Entry::from_path(line.as_ref(), self.symlinks) {
-					if self.seen.insert(e.hash()) {
-						match e {
-							Entry::Dir(p) =>  { self.dirs.push(p); },
-							Entry::File(p) => { self.files.push(p); },
-						}
-					}
+			if
+				! line.is_empty() &&
+				let Some(e) = Entry::from_path(line.as_ref(), self.symlinks) &&
+				self.seen.insert(e.hash())
+			{
+				match e {
+					Entry::Dir(p) =>  { self.dirs.push(p); },
+					Entry::File(p) => { self.files.push(p); },
 				}
 			}
 		}
