@@ -5,6 +5,7 @@
 use dactyl::{
 	NiceU16,
 	NiceU32,
+	NiceSeparator,
 };
 use std::{
 	fmt,
@@ -902,7 +903,7 @@ impl Extension {
 				"Extension::Ext2(",
 				NiceU16::with_separator(
 					u16::from_le_bytes(lowercase!(src[0], src[1])),
-					b'_',
+					NiceSeparator::Underscore,
 				).as_str(),
 				"_u16)",
 			].concat(),
@@ -910,7 +911,7 @@ impl Extension {
 				"Extension::Ext3(",
 				NiceU32::with_separator(
 					u32::from_le_bytes(lowercase!(b'.', src[0], src[1], src[2])),
-					b'_',
+					NiceSeparator::Underscore,
 				).as_str(),
 				"_u32)",
 			].concat(),
@@ -918,7 +919,7 @@ impl Extension {
 				"Extension::Ext4(",
 				NiceU32::with_separator(
 					u32::from_le_bytes(lowercase!(src[0], src[1], src[2], src[3])),
-					b'_',
+					NiceSeparator::Underscore,
 				).as_str(),
 				"_u32)",
 			].concat(),
