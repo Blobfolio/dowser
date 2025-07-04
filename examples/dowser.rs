@@ -2,7 +2,6 @@
 # Dowser: Filtered Find
 */
 
-#[cfg(unix)]
 /// # Do it.
 fn main() {
 	use dowser::{
@@ -14,28 +13,27 @@ fn main() {
 		time::Instant,
 	};
 
-	const EXT: Extension = Extension::new2(*b"gz");
+	const EXT: Extension = Extension::new("gz").unwrap();
 
-	// Search for gzipped MAN pages.
-	let now = Instant::now();
-	let files: Vec<PathBuf> = Dowser::default()
-		.with_path("/usr/share")
-		.filter(|p| Some(EXT) == Extension::try_from2(p))
-		.collect();
+	if std::fs::metadata("/usr/share").is_ok_and(|m| m.file_type().is_dir()) {
+		// Search for gzipped MAN pages.
+		let now = Instant::now();
+		let files: Vec<PathBuf> = Dowser::default()
+			.with_path("/usr/share")
+			.filter(|p| EXT.matches_path(p))
+			.collect();
 
-	println!("Search took {} seconds.", now.elapsed().as_millis() as f64 / 1000.000);
+		println!("Search took {} seconds.", now.elapsed().as_millis() as f64 / 1000.000);
 
-	// Show what we found.
-	if files.is_empty() {
-		println!("No .gz files were found in /usr/share/.");
+		// Show what we found.
+		if files.is_empty() {
+			println!("No .gz files were found in /usr/share/.");
+		}
+		else {
+			println!("There are {} .gz files in /usr/share/.", files.len());
+		}
 	}
 	else {
-		println!("There are {} .gz files in /usr/share/.", files.len());
+		println!("Missing directory /usr/share.");
 	}
-}
-
-#[cfg(not(unix))]
-/// # Don't Do It.
-fn main() {
-	println!("This example is only for unix.");
 }

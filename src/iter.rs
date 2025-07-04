@@ -430,6 +430,7 @@ mod tests {
 		abs_dir.push("_.txt");
 		let abs_p1 = abs_dir.with_file_name("file.txt");
 		let abs_p2 = abs_dir.with_file_name("is-executable.sh");
+		let abs_p3 = std::fs::canonicalize("tests/extensions.txt").unwrap();
 		let abs_perr = abs_dir.with_file_name("foo.bar");
 
 		// Builder init.
@@ -437,9 +438,10 @@ mod tests {
 			.with_path(PathBuf::from("tests/"))
 			.collect();
 		assert!(! w1.is_empty());
-		assert_eq!(w1.len(), 9);
+		assert_eq!(w1.len(), 10);
 		assert!(w1.contains(&abs_p1));
 		assert!(w1.contains(&abs_p2));
+		assert!(w1.contains(&abs_p3));
 		assert!(! w1.contains(&abs_perr));
 
 		// From init.
