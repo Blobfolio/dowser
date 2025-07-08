@@ -1,23 +1,43 @@
 /*!
-# Dowser: Extension
+# Dowser: File Extension
 */
 
-use dactyl::{
-	NiceU16,
-	NiceU32,
-	NiceSeparator,
-};
 use std::{
 	fmt,
-	hash::{
-		Hash,
-		Hasher,
-	},
+	hash,
 	path::Path,
 };
 
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
+
+
+
+/// # ASCII Lower Bit.
+///
+/// An ASCII letter is uppercase if this bit is missing, lowercase if not.
+const ASCII_CASE_MASK: u8 = 0b0010_0000;
+
+/// # Max Extension Length.
+///
+/// Extensions with lengths between `1..=8` are supported.
+const EXT_SIZE: usize = 8;
+
+/// # Zeroed Buffer.
+///
+/// The `Extension` buffer is zero-padded, so a zeroed buffer is as good a
+/// place as any to start.
+const ZEROES: [u8; EXT_SIZE] = [0_u8; EXT_SIZE];
+
+
+
+/// # Helper: Anything But Slashes.
+///
+/// It would be hard to spot typos in this pattern. The macro acts like a kind
+/// of variable so we don't have to worry about typing it correctly.
+macro_rules! notslash {
+	() => ( 0..=46 | 48..=91 | 93..=255 );
+}
 
 
 
@@ -32,899 +52,541 @@ macro_rules! path_slice {
 #[cfg(not(unix))]
 /// # Path to Bytes.
 ///
-/// Convert a path to a slice. On Windows this may not be strictly correct,
-/// but hopefully good enough to match an extension.
+/// Convert a path to a slice… less well.
 macro_rules! path_slice {
 	($path:ident) => ($path.as_ref().to_string_lossy().as_bytes());
 }
 
-/// # Is ASCII alphanumeric?
-///
-/// Build a condition containing one or more value.
-macro_rules! is_ascii_alphanumeric {
-	($v1:expr) => ($v1.is_ascii_alphanumeric());
-	($v1:expr, $($v2:expr),+) => (
-		$v1.is_ascii_alphanumeric() && is_ascii_alphanumeric!($($v2),+)
-	);
-}
-
-/// # Lowercase Slice.
-///
-/// Shove a bunch of individual bytes into an array, lowercased.
-macro_rules! lowercase {
-	($($v:expr),+) => ([ $($v.to_ascii_lowercase()),+ ]);
-}
 
 
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-/// # Extension.
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+/// # Case-Insensitive File Extension.
 ///
-/// This enum can be used to efficiently check a file path's extension case-
-/// insensitively against a hard-coded reference extension. It is likely
-/// overkill in most situations, but if you're looking to optimize the
-/// filtering of large path lists, this can turn those painful nanosecond
-/// operations into pleasant picosecond ones!
+/// This struct can be used to case-insensitively parse and compare "normal"
+/// file path extensions faster and more efficiently than native [`Path`]-based
+/// alternatives.
 ///
-/// The magic is largely down to storing values as `u16` or `u32` integers and
-/// comparing those (rather than byte slices or `OsStr`), and not messing
-/// around with the path `Components` iterator. (Note, this is done using the
-/// safe `u*::from_le_bytes()` methods rather than casting chicanery.)
+/// To keep its size down and speed up, `Extension` ignores the edge cases of
+/// infinity, focusing solely on values composed of ASCII alphanumerics, `!`,
+/// `#`, `+`, `-`, and/or `_`, with lengths between `1..=8`.
 ///
-/// At the moment, only extensions sized between 2-4 bytes are supported as
-/// those sizes are the most common and also translate perfectly to primitives,
-/// but larger values may be added in the future.
+/// In practice, the vast majority of file extensions were created with even
+/// constrainier constraints in mind anyway, so pose no particular problems for
+/// `Extension`.
 ///
-/// ## Reference Constructors.
-///
-/// A "reference" extension is one known to you ahead of time, i.e. what you're
-/// looking for. These can be constructed using the constant [`Extension::new2`],
-/// [`Extension::new3`], and [`Extension::new4`] methods.
-///
-/// Because these are "known" values, no logical validation is performed. If
-/// you do something silly like mix case or type them incorrectly, equality
-/// tests will fail. You'd only be hurting yourself!
-///
-/// ```
-/// use dowser::Extension;
-///
-/// const EXT2: Extension = Extension::new2(*b"gz");
-/// const EXT3: Extension = Extension::new3(*b"png");
-/// const EXT4: Extension = Extension::new4(*b"html");
-/// ```
-///
-/// The main idea is you'll pre-compute these values and compare unknown
-/// runtime values against them later.
-///
-/// ## Runtime Constructors.
-///
-/// A "runtime" extension, for lack of a better adjective, is a value you
-/// don't know ahead of time, e.g. from a user-supplied path. These can be
-/// constructed using the [`Extension::try_from2`], [`Extension::try_from3`],
-/// and [`Extension::try_from4`] methods, which accept any `AsRef<Path>`
-/// argument.
-///
-/// The method you choose should match the length you're looking for. For
-/// example, if you're hoping for a PNG, use [`Extension::try_from3`].
-///
-/// ```
-/// use dowser::Extension;
-///
-/// const EXT3: Extension = Extension::new3(*b"png");
-/// assert_eq!(Extension::try_from3("/path/to/IMAGE.PNG"), Some(EXT3));
-/// assert_eq!(Extension::try_from3("/path/to/doc.html"), None);
-/// ```
+/// There are, however, a few notable outliers — `"webmanifest"` and `"🔥"` to
+/// name two — for which a more open-ended solution like [`Path::extension`]
+/// would be required.
 ///
 /// ## Examples
 ///
-/// To filter a list of image paths with the standard library — say, matching
-/// PNGs — you would do something like:
+/// When matching paths against a _single_ target extension, the
+/// [`Extension::matches_path`] helper is choice.
 ///
-/// ```no_run
-/// use std::ffi::OsStr;
-/// use std::path::PathBuf;
+/// ```
+/// use dowser::{Dowser, Extension};
 ///
-/// // Imagine this is much longer…
-/// let paths = vec![PathBuf::from("/path/to/image.png")];
+/// // Target extensions should be constant.
+/// const EXT: Extension = Extension::new("avi").unwrap();
 ///
-/// paths.iter()
-///     .filter(|p| p.extension().is_some_and(|e|
-///         e.eq_ignore_ascii_case(OsStr::new("png"))
-///     ))
-///     .for_each(|p| todo!());
+/// // Loop through a bunch of paths.
+/// for p in Dowser::from("./videos") {
+///     if EXT.matches_path(&p) {
+///         // Do something with the AVI…
+///     }
+/// }
 /// ```
 ///
-/// Using [`Extension`] instead, the same operation looks like:
+/// When matching against multiple target extensions, it will usually be more
+/// efficient to explicitly parse the path's extension for comparison instead.
 ///
-/// ```no_run
+/// ```
 /// use dowser::Extension;
-/// use std::path::PathBuf;
 ///
-/// // Imagine this is much longer…
-/// let paths = vec![PathBuf::from("/path/to/image.png")];
+/// // Same as before, target extensions should be constant.
+/// const EXT_FLAC: Extension = Extension::new("flac").unwrap();
+/// const EXT_MP3: Extension =  Extension::new("mp3").unwrap();
+/// const EXT_WAV: Extension =  Extension::new("wav").unwrap();
 ///
-/// // The reference extension.
-/// const EXT: Extension = Extension::new3(*b"png");
+/// // FYI the path loop doesn't have to come from Dowser.
+/// let mut lossless = Vec::new();
+/// let mut lossy = Vec::new();
+/// if let Ok(rd) = std::fs::read_dir("/usr/share") {
+///     for e in rd.filter_map(Result::ok) {
+///         if e.file_type().is_ok_and(|f| ! f.is_dir()) {
+///             // Finally, a path! Haha.
+///             let path = e.path();
 ///
-/// paths.iter()
-///     .filter(|p| Extension::try_from3(p) == Some(EXT))
-///     .for_each(|p| todo!());
+///             // Extract the extension, then check for matches.
+///             match Extension::from_path(&path) {
+///                 Some(EXT_FLAC | EXT_WAV) => {
+///                     lossless.push(path);
+///                 },
+///                 Some(EXT_MP3) => {
+///                     lossy.push(path);
+///                 },
+///                 // Something else. Let it go.
+///                 _ => {},
+///             }
+///         }
+///     }
+/// }
 /// ```
-pub enum Extension {
-	/// # 2-char Extension.
-	///
-	/// Like `.gz`.
-	Ext2(u16),
+///
+/// [`Extension`] can be useful for grouping too, since it's small and `Copy`.
+///
+/// ```
+/// use std::collections::{BTreeMap, BTreeSet, HashMap};
+/// use std::path::PathBuf;
+/// use dowser::{Dowser, Extension};
+///
+/// // Groupings can leverage Hash or Ord, dealer's choice.
+/// let mut ordered = BTreeMap::<Extension, BTreeSet<PathBuf>>::new();
+/// let mut hashed =  HashMap::<Extension, BTreeSet<PathBuf>>::new();
+/// # let mut limit = 0;
+/// for p in Dowser::from("/usr/share") {
+///     if let Some(ext) = Extension::from_path(&p) {
+///         ordered.entry(ext).or_default().insert(p.clone());
+///         hashed.entry(ext).or_default().insert(p);
+///     }
+///     # limit += 1;
+///     # if 100 < limit { break; }
+/// }
+///
+/// // The keys may not line up, but the counts will come out the same
+/// // either way.
+/// assert_eq!(ordered.len(), hashed.len());
+/// ```
+///
+/// Speaking of ordering, [`Extension`]s sort by length, then value.
+///
+/// ```
+/// use dowser::Extension;
+///
+/// const SORTED: [Extension; 7] = [
+///     Extension::new("7z").unwrap(),
+///     Extension::new("gz").unwrap(),
+///     Extension::new("xz").unwrap(),
+///
+///     Extension::new("bz2").unwrap(),
+///     Extension::new("zip").unwrap(),
+///     Extension::new("zst").unwrap(),
+///
+///     Extension::new("svgz").unwrap(),
+/// ];
+///
+/// assert!(SORTED.is_sorted()); // Told you!
+/// ```
+pub struct Extension([u8; EXT_SIZE]);
 
-	/// # 3-char Extension.
-	///
-	/// Like `.png`.
-	Ext3(u32),
+impl AsRef<[u8]> for Extension {
+	#[inline]
+	fn as_ref(&self) -> &[u8] { self.as_bytes() }
+}
 
-	/// # 4-char Extension.
-	///
-	/// Like `.html`.
-	Ext4(u32),
+impl AsRef<str> for Extension {
+	#[inline]
+	fn as_ref(&self) -> &str { self.as_str() }
 }
 
 impl fmt::Debug for Extension {
-	#[expect(clippy::many_single_char_names, reason = "For consistency.")]
 	#[inline]
-	/// # Debug `Extension`.
-	///
-	/// This implementation yields the inner value as a readable string value,
-	/// unless invalid.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// assert_eq!(
-	///     format!("{:?}", Extension::new2(*b"gz")),
-	///     "Extension::Ext2(gz)",
-	/// );
-	/// assert_eq!(
-	///     format!("{:?}", Extension::new3(*b"png")),
-	///     "Extension::Ext3(png)",
-	/// );
-	/// assert_eq!(
-	///     format!("{:?}", Extension::new4(*b"html")),
-	///     "Extension::Ext4(html)",
-	/// );
-	///
-	/// // This is bad. Don't do this.
-	/// assert_eq!(
-	///     format!("{:?}", Extension::Ext2(0)),
-	///     "Extension::Ext2(�)",
-	/// );
-	///```
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let kind = match *self {
-			Self::Ext2(n) => {
-				let [a, b] = n.to_le_bytes();
-				if is_ascii_alphanumeric!(a, b) {
-					return write!(
-						f,
-						"Extension::Ext2({})",
-						std::str::from_utf8(&lowercase!(a, b))
-							.map_err(|_| fmt::Error)?
-					);
-				}
-				"Ext2"
-			},
-			Self::Ext3(n) => {
-				let [_, a, b, c] = n.to_le_bytes();
-				if is_ascii_alphanumeric!(a, b, c) {
-					return write!(
-						f,
-						"Extension::Ext3({})",
-						std::str::from_utf8(&lowercase!(a, b, c))
-							.map_err(|_| fmt::Error)?
-					);
-				}
-				"Ext3"
-			},
-			Self::Ext4(n) => {
-				let [a, b, c, d] = n.to_le_bytes();
-				if is_ascii_alphanumeric!(a, b, c, d) {
-					return write!(
-						f,
-						"Extension::Ext4({})",
-						std::str::from_utf8(&lowercase!(a, b, c, d))
-							.map_err(|_| fmt::Error)?
-					);
-				}
-				"Ext4"
-			},
-		};
-
-		write!(f, "Extension::{kind}({})", char::REPLACEMENT_CHARACTER)
+		write!(f, "Extension({self})")
 	}
 }
 
 impl fmt::Display for Extension {
-	#[expect(clippy::many_single_char_names, reason = "For consistency.")]
 	#[inline]
-	/// # Display `Extension`.
-	///
-	/// This prints only the extension part (minus the dot), unless invalid.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// assert_eq!(
-	///     Extension::new2(*b"gz").to_string(),
-	///     "gz",
-	/// );
-	/// assert_eq!(
-	///     Extension::new3(*b"png").to_string(),
-	///     "png",
-	/// );
-	/// assert_eq!(
-	///     Extension::new4(*b"html").to_string(),
-	///     "html",
-	/// );
-	///
-	/// // This is bad. Don't do this.
-	/// assert_eq!(
-	///     Extension::Ext2(0).to_string(),
-	///     char::REPLACEMENT_CHARACTER.to_string(),
-	/// );
-	///```
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match *self {
-			Self::Ext2(n) => {
-				let [a, b] = n.to_le_bytes();
-				if is_ascii_alphanumeric!(a, b) {
-					return std::str::from_utf8(&lowercase!(a, b))
-						.map_err(|_| fmt::Error)
-						.and_then(|n| f.write_str(n));
-				}
-			},
-			Self::Ext3(n) => {
-				let [_, a, b, c] = n.to_le_bytes();
-				if is_ascii_alphanumeric!(a, b, c) {
-					return std::str::from_utf8(&lowercase!(a, b, c))
-						.map_err(|_| fmt::Error)
-						.and_then(|n| f.write_str(n));
-				}
-			},
-			Self::Ext4(n) => {
-				let [a, b, c, d] = n.to_le_bytes();
-				if is_ascii_alphanumeric!(a, b, c, d) {
-					return std::str::from_utf8(&lowercase!(a, b, c, d))
-						.map_err(|_| fmt::Error)
-						.and_then(|n| f.write_str(n));
-				}
-			},
-		}
-
-		<char as fmt::Display>::fmt(&char::REPLACEMENT_CHARACTER, f)
+		<str as fmt::Display>::fmt(self.as_str(), f)
 	}
 }
 
-impl Hash for Extension {
+impl hash::Hash for Extension {
 	#[inline]
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		match *self {
-			Self::Ext2(n) => { state.write_u16(n); },
-			Self::Ext3(n) | Self::Ext4(n) => { state.write_u32(n); },
-		}
+	/// # Hash.
+	///
+	/// The `Extension` data is hashed en masse via a single call to
+	/// [`Hasher::write_u64`](std::hash::Hasher::write_u64).
+	fn hash<H: hash::Hasher>(&self, state: &mut H) {
+		state.write_u64(u64::from_be_bytes(self.0));
 	}
 }
 
-impl<P> PartialEq<P> for Extension
-where P: AsRef<Path> {
-	#[inline]
-	/// # Path Equality.
-	///
-	/// When there's just one extension and one path to check, you can compare
-	/// them directly (extension first).
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// const MY_EXT: Extension = Extension::new4(*b"html");
-	///
-	/// // Yep!
-	/// assert_eq!(MY_EXT, "/path/to/index.html");
-	/// assert_eq!(MY_EXT, "/path/to/INDEX.HTML");
-	///
-	/// // Nope!
-	/// assert_ne!(MY_EXT, "/path/to/image.jpeg");
-	/// assert_ne!(MY_EXT, "/path/to/image.png");
-	/// assert_ne!(MY_EXT, "/path/to/image.tar.gz");
-	/// ```
-	fn eq(&self, other: &P) -> bool {
-		match *self {
-			Self::Ext2(n1) =>
-				if let Some(Self::Ext2(n2)) = Self::try_from2(other) { n1 == n2 }
-				else { false },
-			Self::Ext3(n1) =>
-				if let Some(Self::Ext3(n2)) = Self::try_from3(other) { n1 == n2 }
-				else { false },
-			Self::Ext4(n1) =>
-				if let Some(Self::Ext4(n2)) = Self::try_from4(other) { n1 == n2 }
-				else { false },
-		}
-	}
-}
-
-/// # Unchecked Instantiation.
-impl Extension {
-	#[must_use]
-	#[inline]
-	/// # New Unchecked (2).
-	///
-	/// Create a new [`Extension`], unchecked, from two bytes, e.g. `*b"gz"`.
-	/// This should be lowercase and not include a period.
-	///
-	/// This method is intended for known values that you want to check
-	/// unknown values against. Sanity-checking is traded for performance, but
-	/// you're only hurting yourself if you misuse it.
-	///
-	/// For (checked) compile-time generation, see [`Extension::codegen`].
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	/// const MY_EXT: Extension = Extension::new2(*b"gz");
-	/// ```
-	///
-	/// ## Panics
-	///
-	/// This will panic in debug builds if the extension is not lowercase
-	/// ASCII alphanumeric.
-	pub const fn new2(src: [u8; 2]) -> Self {
-		debug_assert!(
-			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
-			matches!(src[1], b'0'..=b'9' | b'a'..=b'z'),
-			"`Extension` must be lowercase, ASCII alphanumeric.",
-		);
-		Self::Ext2(u16::from_le_bytes(src))
-	}
-
-	#[must_use]
-	#[inline]
-	/// # New Unchecked (3).
-	///
-	/// Create a new [`Extension`], unchecked, from three bytes, e.g. `*b"gif"`.
-	/// This should be lowercase and not include a period.
-	///
-	/// This method is intended for known values that you want to check
-	/// unknown values against. Sanity-checking is traded for performance, but
-	/// you're only hurting yourself if you misuse it.
-	///
-	/// For (checked) compile-time generation, see [`Extension::codegen`].
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	/// const MY_EXT: Extension = Extension::new3(*b"gif");
-	/// ```
-	///
-	/// ## Panics
-	///
-	/// This will panic in debug builds if the extension is not lowercase
-	/// ASCII alphanumeric.
-	pub const fn new3(src: [u8; 3]) -> Self {
-		debug_assert!(
-			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
-			matches!(src[1], b'0'..=b'9' | b'a'..=b'z') &&
-			matches!(src[2], b'0'..=b'9' | b'a'..=b'z'),
-			"`Extension` must be lowercase, ASCII alphanumeric.",
-		);
-		Self::Ext3(u32::from_le_bytes([b'.', src[0], src[1], src[2]]))
-	}
-
-	#[must_use]
-	#[inline]
-	/// # New Unchecked (4).
-	///
-	/// Create a new [`Extension`], unchecked, from four bytes, e.g. `*b"html"`.
-	/// This should be lowercase and not include a period.
-	///
-	/// This method is intended for known values that you want to check
-	/// unknown values against. Sanity-checking is traded for performance, but
-	/// you're only hurting yourself if you misuse it.
-	///
-	/// For (checked) compile-time generation, see [`Extension::codegen`].
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	/// const MY_EXT: Extension = Extension::new4(*b"html");
-	/// ```
-	///
-	/// ## Panics
-	///
-	/// This will panic in debug builds if the extension is not lowercase
-	/// ASCII alphanumeric.
-	pub const fn new4(src: [u8; 4]) -> Self {
-		debug_assert!(
-			matches!(src[0], b'0'..=b'9' | b'a'..=b'z') &&
-			matches!(src[1], b'0'..=b'9' | b'a'..=b'z') &&
-			matches!(src[2], b'0'..=b'9' | b'a'..=b'z') &&
-			matches!(src[3], b'0'..=b'9' | b'a'..=b'z'),
-			"`Extension` must be lowercase, ASCII alphanumeric.",
-		);
-		Self::Ext4(u32::from_le_bytes(src))
-	}
-}
-
-/// # From Paths.
-impl Extension {
-	#[must_use]
-	#[inline]
-	/// # Try From Path (2).
-	///
-	/// This method is used to (try to) pull a 2-byte extension from a file
-	/// path. This requires that the path be at least 4 bytes, with anything
-	/// but a forward/backward slash at `[len - 4]` and a dot at `[len - 3]`.
-	///
-	/// If successful, it will return an [`Extension::Ext2`] that can be
-	/// compared against your reference [`Extension`]. Casing will be fixed
-	/// automatically.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// const MY_EXT: Extension = Extension::new2(*b"gz");
-	///
-	/// // Case doesn't matter.
-	/// assert_eq!(
-	///     Extension::try_from2("/path/to/file.tar.gz"),
-	///     Some(MY_EXT),
-	/// );
-	/// assert_eq!(
-	///     Extension::try_from2("/path/to/file.tar.GZ"),
-	///     Some(MY_EXT),
-	/// );
-	///
-	/// // With a constant, matches! works too.
-	/// assert!(matches!(
-	///     Extension::try_from2("/path/to/file.tar.gz"),
-	///     Some(MY_EXT),
-	/// ));
-	///
-	/// // Three is not two.
-	/// assert_eq!(
-	///     Extension::try_from2("/path/to/file.png"),
-	///     None,
-	/// );
-	///
-	/// // Two is two, but a different two from MY_EXT.
-	/// assert_eq!(
-	///     Extension::try_from2("/path/to/file.BR"),
-	///     Some(Extension::new2(*b"br")),
-	/// );
-	/// ```
-	pub fn try_from2<P>(path: P) -> Option<Self>
-	where P: AsRef<Path> {
-		Self::slice_ext2(path_slice!(path))
-	}
-
-	#[must_use]
-	#[inline]
-	/// # Try From Path (3).
-	///
-	/// This method is used to (try to) pull a 3-byte extension from a file
-	/// path. This requires that the path be at least 5 bytes, with anything
-	/// but a forward/backward slash at `[len - 5]` and a dot at `[len - 4]`.
-	///
-	/// If successful, it will return an [`Extension::Ext3`] that can be
-	/// compared against your reference [`Extension`]. Casing will be fixed
-	/// automatically.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// const MY_EXT: Extension = Extension::new3(*b"png");
-	///
-	/// // Case doesn't matter.
-	/// assert_eq!(
-	///     Extension::try_from3("/path/to/file.png"),
-	///     Some(MY_EXT),
-	/// );
-	/// assert_eq!(
-	///     Extension::try_from3("/path/to/FILE.PNG"),
-	///     Some(MY_EXT),
-	/// );
-	///
-	/// // With a constant, matches! works too.
-	/// assert!(matches!(
-	///     Extension::try_from3("/path/to/file.png"),
-	///     Some(MY_EXT),
-	/// ));
-	///
-	/// // Four is not three.
-	/// assert_eq!(
-	///     Extension::try_from3("/path/to/file.html"),
-	///     None,
-	/// );
-	///
-	/// // Three is three, but a different three from MY_EXT.
-	/// assert_eq!(
-	///     Extension::try_from3("/path/to/file.jpg"),
-	///     Some(Extension::new3(*b"jpg")),
-	/// );
-	/// ```
-	pub fn try_from3<P>(path: P) -> Option<Self>
-	where P: AsRef<Path> {
-		Self::slice_ext3(path_slice!(path))
-	}
-
-	#[must_use]
-	#[inline]
-	/// # Try From Path (4).
-	///
-	/// This method is used to (try to) pull a 4-byte extension from a file
-	/// path. This requires that the path be at least 6 bytes, with anything
-	/// but a forward/backward slash at `[len - 6]` and a dot at `[len - 5]`.
-	///
-	/// If successful, it will return an [`Extension::Ext4`] that can be
-	/// compared against your reference [`Extension`]. Casing will be fixed
-	/// automatically.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// const MY_EXT: Extension = Extension::new4(*b"html");
-	///
-	/// // Case doesn't matter.
-	/// assert_eq!(
-	///     Extension::try_from4("/path/to/file.html"),
-	///     Some(MY_EXT),
-	/// );
-	/// assert_eq!(
-	///     Extension::try_from4("/path/to/FILE.HTML"),
-	///     Some(MY_EXT),
-	/// );
-	///
-	/// // With a constant, matches! works too.
-	/// assert!(matches!(
-	///     Extension::try_from4("/path/to/file.html"),
-	///     Some(MY_EXT),
-	/// ));
-	///
-	/// // Three is not four.
-	/// assert_eq!(
-	///     Extension::try_from4("/path/to/file.png"),
-	///     None,
-	/// );
-	///
-	/// // Four is four, but a different four from MY_EXT.
-	/// assert_eq!(
-	///     Extension::try_from4("/path/to/file.xhtm"),
-	///     Some(Extension::new4(*b"xhtm")),
-	/// );
-	/// ```
-	pub fn try_from4<P>(path: P) -> Option<Self>
-	where P: AsRef<Path> {
-		Self::slice_ext4(path_slice!(path))
-	}
-}
-
-/// # From Slices.
 impl Extension {
 	#[inline]
 	#[must_use]
-	/// # Extension Slice (2).
+	/// # New Extension.
 	///
-	/// This method is used to (try to) pull a 2-byte extension from a file
-	/// path in slice form. This requires that the path be at least 4 bytes,
-	/// with anything but a forward/backward slash at `[len - 4]` and a dot at
-	/// `[len - 3]`.
+	/// Create a new [`Extension`] from a string slice representation of same,
+	/// e.g. `"jpg"`.
 	///
-	/// If successful, it will return an [`Extension::Ext2`] that can be
-	/// compared against your reference [`Extension`]. Casing will be fixed
-	/// automatically.
+	/// [`Extension`]s are case-insensitive, but must be between `1..=8` bytes
+	/// in length and contain only ASCII alphanumerics, `!`, `#`, `+`, `-`,
+	/// and/or `_`, or `None` will be returned instead.
 	///
 	/// ## Examples
 	///
 	/// ```
 	/// use dowser::Extension;
 	///
-	/// const MY_EXT: Extension = Extension::new2(*b"gz");
-	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.gz"), Some(MY_EXT));
-	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.GZ"), Some(MY_EXT));
+	/// // For best results, stick with const/literals so the checks and
+	/// // case-tweaking involved with setup can be handled at compile-time.
+	/// const JPG: Extension = Extension::new("jpg").unwrap();
+	/// let jpeg = const { Extension::new("jpeg").unwrap() };
 	///
-	/// // Non-matches.
-	/// assert_eq!(Extension::slice_ext2(b"/path/to/.gz"), None);
-	/// assert_eq!(Extension::slice_ext2(b"/path/to\\.gz"), None);
-	/// assert_eq!(Extension::slice_ext2(b"/path/to/file.png"), None);
-	/// assert_ne!(Extension::slice_ext2(b"/path/to/file.br"), Some(MY_EXT));
-	/// ```
-	pub const fn slice_ext2(path: &[u8]) -> Option<Self> {
-		if
-			let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b] = path &&
-			is_ascii_alphanumeric!(a, b)
-		{
-			Some(Self::Ext2(u16::from_le_bytes(lowercase!(a, b))))
-		}
-		else { None }
-	}
-
-	#[inline]
-	#[must_use]
-	/// # Extension Slice (3).
+	/// // More programmatic implementations will still work, but may incur a
+	/// // runtime setup cost, and won't be usable in righthand `matches!`
+	/// // contexts.
+	/// let ext = "png";
+	/// let png = Extension::new(ext).unwrap();
 	///
-	/// This method is used to (try to) pull a 3-byte extension from a file
-	/// path in slice form. This requires that the path be at least 5 bytes,
-	/// with anything but a forward/backward slash at `[len - 5]` and a dot at
-	/// `[len - 4]`.
-	///
-	/// If successful, it will return an [`Extension::Ext3`] that can be
-	/// compared against your reference [`Extension`]. Casing will be fixed
-	/// automatically.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// const MY_EXT: Extension = Extension::new3(*b"png");
-	/// assert_eq!(Extension::slice_ext3(b"/path/to/file.png"), Some(MY_EXT));
-	/// assert_eq!(Extension::slice_ext3(b"/path/to/FILE.PNG"), Some(MY_EXT));
-	///
-	/// // Non-matches.
-	/// assert_eq!(Extension::slice_ext3(b"/path/to/.png"), None);
-	/// assert_eq!(Extension::slice_ext3(b"/path/to\\.png"), None);
-	/// assert_eq!(Extension::slice_ext3(b"/path/to/file.html"), None);
-	/// assert_ne!(Extension::slice_ext3(b"/path/to/file.jpg"), Some(MY_EXT));
-	/// ```
-	pub const fn slice_ext3(path: &[u8]) -> Option<Self> {
-		if
-			let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c] = path &&
-			is_ascii_alphanumeric!(a, b, c)
-		{
-			Some(Self::Ext3(u32::from_le_bytes(lowercase!(b'.', a, b, c))))
-		}
-		else { None }
-	}
-
-	#[inline]
-	#[must_use]
-	/// # Extension Slice (4).
-	///
-	/// This method is used to (try to) pull a 4-byte extension from a file
-	/// path in slice form. This requires that the path be at least 6 bytes,
-	/// with anything but a forward/backward slash at `[len - 6]` and a dot at
-	/// `[len - 5]`.
-	///
-	/// If successful, it will return an [`Extension::Ext4`] that can be
-	/// compared against your reference [`Extension`]. Casing will be fixed
-	/// automatically.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// const MY_EXT: Extension = Extension::new4(*b"html");
-	/// assert_eq!(Extension::slice_ext4(b"/path/to/file.html"), Some(MY_EXT));
-	/// assert_eq!(Extension::slice_ext4(b"/path/to/FILE.HTML"), Some(MY_EXT));
-	///
-	/// // Non-matches.
-	/// assert_eq!(Extension::slice_ext2(b"/path/to/.html"), None);
-	/// assert_eq!(Extension::slice_ext2(b"/path/to\\.html"), None);
-	/// assert_eq!(Extension::slice_ext4(b"/path/to/file.png"), None);
-	/// assert_ne!(Extension::slice_ext4(b"/path/to/file.xhtm"), Some(MY_EXT));
-	/// ```
-	pub const fn slice_ext4(path: &[u8]) -> Option<Self> {
-		if
-			let [.., 0..=46 | 48..=91 | 93..=255, b'.', a, b, c, d] = path &&
-			is_ascii_alphanumeric!(a, b, c, d)
-		{
-			Some(Self::Ext4(u32::from_le_bytes(lowercase!(a, b, c, d))))
-		}
-		else { None }
-	}
-
-	#[must_use]
-	/// # Slice Extension.
-	///
-	/// This returns the file extension portion of a path as a byte slice,
-	/// similar to [`std::path::Path::extension`], but faster (and constant)
-	/// since it is dealing with straight bytes.
-	///
-	/// The extension is found by jumping to the last period, ensuring the byte
-	/// _before_ that period is not a path separator, and that there are one or
-	/// more ASCII alphanumeric bytes _after_ that period.
-	///
-	/// If the above are all good, a slice containing everything after that
-	/// last period is returned.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// // Uppercase in, uppercase out.
+	/// // Extensions are always stored lower case, but nothing will break if
+	/// // you accidentally pass UPPER.
 	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/IMAGE.JPEG"),
-	///     Some(&b"JPEG"[..])
+	///     Extension::new("html"),
+	///     Extension::new("HTML"),
 	/// );
 	///
-	/// // Lowercase in, lowercase out.
-	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/file.docx"),
-	///     Some(&b"docx"[..])
-	/// );
-	///
-	/// // Sizes not otherwise supported by `Extension` can be returned.
-	/// assert_eq!(
-	///     Extension::slice_ext(b"/usr/share/man/foo.1"),
-	///     Some(&b"1"[..])
-	/// );
-	/// assert_eq!(
-	///     Extension::slice_ext(b"firefox.desktop"),
-	///     Some(&b"desktop"[..])
-	/// );
-	///
-	/// // These are all bad, though:
-	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/.hide"),
-	///     None
-	/// );
-	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/"),
-	///     None
-	/// );
-	/// assert_eq!(
-	///     Extension::slice_ext(b"/path/to/file."),
-	///     None
-	/// );
-	/// ```
-	pub const fn slice_ext(src: &[u8]) -> Option<&[u8]> {
-		// Cut ASCII alphanumerics from the end of the slice.
-		let mut stub = src;
-		while let [ rest @ .., b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' ] = stub {
-			stub = rest;
-		}
-
-		if
-			// Extension half is non-empty.
-			stub.len() < src.len() &&
-			// The stub has a file name and dot at the end.
-			matches!(stub, [ .., 0..=46 | 48..=91 | 93..=255, b'.' ])
-		{
-			let (_, out) = src.split_at(stub.len());
-			Some(out)
-		}
-		else { None }
-	}
-}
-
-/// # Codegen Helpers.
-impl Extension {
-	#[expect(clippy::needless_doctest_main, reason = "For demonstration.")]
-	#[must_use]
-	/// # Codegen Helper.
-	///
-	/// This _compile-time_ method can be used in a `build.rs` script to
-	/// generate a pre-computed [`Extension`] value of any supported length
-	/// (2-4 bytes).
-	///
-	/// Unlike the runtime methods, this will automatically fix case and period
-	/// inconsistencies, but ideally you should still pass it just the letters,
-	/// in lowercase, because you have the power to do so. Haha.
-	///
-	/// ## Examples
-	///
-	/// ```
-	/// use dowser::Extension;
-	///
-	/// // This is what it looks like.
-	/// assert_eq!(
-	///     Extension::codegen(b"js"),
-	///     "Extension::Ext2(29_546_u16)"
-	/// );
-	/// assert_eq!(
-	///     Extension::codegen(b"jpg"),
-	///     "Extension::Ext3(1_735_420_462_u32)"
-	/// );
-	/// assert_eq!(
-	///     Extension::codegen(b"html"),
-	///     "Extension::Ext4(1_819_112_552_u32)"
-	/// );
-	/// ```
-	///
-	/// In a typical `build.rs` workflow, you'd be building up a string of
-	/// other code around it, and saving it all to a file, like:
-	///
-	/// ```no_run
-	/// use dowser::Extension;
-	/// use std::fs::File;
-	/// use std::io::Write;
-	/// use std::path::PathBuf;
-	///
-	/// fn main() {
-	///     let out = format!(
-	///         "const MY_EXT: Extension = {};",
-	///         Extension::codegen(b"jpg")
-	///     );
-	///
-	///     let out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap())
-	///         .join("compile-time-vars.rs");
-	///     let mut f = File::create(out_path).unwrap();
-	///     f.write_all(out.as_bytes()).unwrap();
-	///     f.flush().unwrap();
+	/// // Wrong is wrong, though.
+	/// for i in [
+	///     "cpp*",        // Asterisk.
+	///     "gif ",        // Space.
+	///     "1.gz",        // Dot.
+	///     "ÖöÖö",        // Not ASCII.
+	///     "🍆",          // Even less ASCII.
+	///     "",            // Too short.
+	///     "webmanifest", // Too long.
+	/// ] {
+	///     assert!(Extension::new(i).is_none(), "{i:?}");
 	/// }
 	/// ```
+	pub const fn new(src: &str) -> Option<Self> { Self::new_slice(src.as_bytes()) }
+
+	#[doc(hidden)]
+	#[inline]
+	#[must_use]
+	/// # New Extension (From Slice).
 	///
-	/// Then in your main program, say `lib.rs`, you'd toss an `include!()` to
-	/// that file to import the code _as code_, like:
+	/// Same as [`Extension::new`], but for extensions represented as byte
+	/// slices.
+	pub const fn new_slice(mut src: &[u8]) -> Option<Self> {
+		if ! src.is_empty() && src.len() <= EXT_SIZE {
+			// Optimistically copy bytes to the buffer, right to left.
+			let mut dst = ZEROES;
+			let mut idx = EXT_SIZE;
+			while let [ rest @ .., n ] = src && let Some(n) = sanitize_byte(*n) {
+				if idx == 0 { return None; } // Too long!
+				idx -= 1;
+				dst[idx] = n;
+				src = rest;
+			}
+
+			// If we wrote something and everything, we're good!
+			if idx < EXT_SIZE && src.is_empty() { Some(Self(dst)) }
+			else { None }
+		}
+		else { None }
+	}
+
+	#[inline]
+	#[must_use]
+	/// # New Extension (From Path).
 	///
-	/// ```no_run,ignore
+	/// Try to parse and return a new [`Extension`] from a file `Path`.
+	///
+	/// Unlike [`Path::extension`], this will return `None` if the extension
+	/// is not `1..=8` bytes in length, or contains anything other than ASCII
+	/// alphanumerics, `!`, `#`, `+`, `-`, or `_`.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	/// use std::path::Path;
+	///
+	/// const HTM: Extension =  Extension::new("htm").unwrap();
+	/// const HTML: Extension = Extension::new("html").unwrap();
+	///
+	/// // Random path collection.
+	/// let mut files: Vec<&Path> = vec![
+	///     Path::new("/path/to/404.htm"),
+	///     Path::new("/path/to/about.html"),
+	///     Path::new("/path/to/about.JPG"),
+	///     Path::new("/path/to/contact.html"),
+	///     Path::new("/path/to/image.jpg"),
+	///     Path::new("/path/to/index.html"),
+	///     Path::new("/path/to/logo.png"),
+	/// ];
+	///
+	/// // Reduce to only those with JPE?G/PNG extensions.
+	/// files.retain(|p| matches!(
+	///     Extension::from_path(p),
+	///     Some(HTM | HTML),
+	/// ));
+	///
+	/// // The results:
+	/// assert_eq!(
+	///     files,
+	///     [
+	///         Path::new("/path/to/404.htm"),
+	///         Path::new("/path/to/about.html"),
+	///         Path::new("/path/to/contact.html"),
+	///         Path::new("/path/to/index.html"),
+	///     ],
+	/// );
+	/// ```
+	pub fn from_path<P: AsRef<Path>>(src: P) -> Option<Self> {
+		Self::from_path_slice(path_slice!(src))
+	}
+
+	#[inline]
+	#[must_use]
+	/// # New Extension (From Path Slice).
+	///
+	/// Same as [`Extension::from_path`], but for paths represented as byte
+	/// slices.
+	pub const fn from_path_slice(mut src: &[u8]) -> Option<Self> {
+		// Optimistically copy (valid) bytes to the buffer, right to left.
+		let mut dst = ZEROES;
+		let mut idx = EXT_SIZE;
+		while let [ rest @ .., n ] = src && let Some(n) = sanitize_byte(*n) {
+			if idx == 0 { return None; }
+			idx -= 1;
+			dst[idx] = n;
+			src = rest;
+		}
+
+		// If we wrote something and the remainder ends with a not-slash and
+		// dot, we're good!
+		if idx < EXT_SIZE && matches!(src, [ .., notslash!(), b'.' ]) { Some(Self(dst)) }
+		else { None }
+	}
+}
+
+impl Extension {
+	#[inline]
+	#[must_use]
+	/// # As Byte Slice.
+	///
+	/// Return the extension as a (lower case) byte slice.
+	///
+	/// ## Examples
+	///
+	/// ```
 	/// use dowser::Extension;
 	///
-	/// include!(concat!(env!("OUT_DIR"), "/compile-time-vars.rs"));
+	/// assert_eq!(
+	///     Extension::new("x_b").unwrap().as_bytes(),
+	///     b"x_b",
+	/// );
+	/// assert_eq!(
+	///     Extension::new("X_B").unwrap().as_bytes(),
+	///     b"x_b",
+	/// );
+	/// ```
+	pub const fn as_bytes(&self) -> &[u8] {
+		// The buffer is zero-padded, so we just need to chop those off
+		// before returning.
+		let mut out = self.0.as_slice();
+		while let [ 0, rest @ .. ] = out { out = rest; }
+		out
+	}
+
+	#[must_use]
+	/// # As String Slice.
+	///
+	/// Return the extension as a (lower case) string slice.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// assert_eq!(
+	///     Extension::new("c++").unwrap().as_str(),
+	///     "c++",
+	/// );
+	/// assert_eq!(
+	///     Extension::new("C++").unwrap().as_str(),
+	///     "c++",
+	/// );
+	/// ```
+	pub const fn as_str(&self) -> &str {
+		// Safety: the inner buffer is ASCII, even the unused bytes.
+		let Ok(out) = std::str::from_utf8(self.as_bytes()) else { unreachable!(); };
+		out
+	}
+
+	#[must_use]
+	/// # Is Empty?
+	///
+	/// This should always return false.
+	pub const fn is_empty(self) -> bool { self.0[EXT_SIZE - 1] == 0 }
+
+	#[must_use]
+	/// # Length.
+	///
+	/// Return the length of the extension.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// assert_eq!(
+	///     Extension::new("c").unwrap().len(),
+	///     1,
+	/// );
+	/// assert_eq!(
+	///     Extension::new("h!").unwrap().len(),
+	///     2,
+	/// );
+	/// assert_eq!(
+	///     Extension::new("e##").unwrap().len(),
+	///     3,
+	/// );
+	/// assert_eq!(
+	///     Extension::new("html").unwrap().len(),
+	///     4,
+	/// );
+	/// assert_eq!(
+	///     Extension::new("xhtml").unwrap().len(),
+	///     5,
+	/// );
+	/// assert_eq!(
+	///     Extension::new("n-gage").unwrap().len(),
+	///     6,
+	/// );
+	/// assert_eq!(
+	///     Extension::new("geojson").unwrap().len(),
+	///     7,
+	/// );
+	/// assert_eq!(
+	///     Extension::new("manifest").unwrap().len(),
+	///     8,
+	/// );
+	/// ```
+	pub const fn len(self) -> usize { self.as_bytes().len() }
+}
+
+impl Extension {
+	#[inline]
+	#[must_use]
+	/// # Path Has Matching Extension?
+	///
+	/// Returns `true` if the path ends with the extension.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Extension;
+	///
+	/// const TXT: Extension = Extension::new("txt").unwrap();
+	///
+	/// // Paths can be relative or absolute.
+	/// assert!(TXT.matches_path("/usr/share/plain.txt"));
+	/// assert!(TXT.matches_path("../docs/plain.txt"));
+	/// assert!(TXT.matches_path("./plain.txt"));
+	/// assert!(TXT.matches_path("plain.txt"));
+	///
+	/// // Case doesn't matter.
+	/// assert!(TXT.matches_path("PLAIN.TXT"));
+	///
+	/// // Unicode (outside the extension) won't break anything.
+	/// assert!(TXT.matches_path("♥.txt"));
+	///
+	/// // Nor will extra dots in the middle.
+	/// assert!(TXT.matches_path("untitled.fanfic.2025.txt"));
+	///
+	/// // Wrong is wrong, though.
+	/// assert!(! TXT.matches_path("txt"));         // No stem, no extension.
+	/// assert!(! TXT.matches_path(".txt"));
+	/// assert!(! TXT.matches_path("./txt"));
+	/// assert!(! TXT.matches_path("file.txt "));   // Trailing space.
+	/// assert!(! TXT.matches_path("file.txt.gz")); // Last extension wins.
+	/// assert!(! TXT.matches_path("file.rtf"));    // Rich people problems.
+	/// assert!(! TXT.matches_path("file.🕱"));      // Looks scary!
 	/// ```
 	///
-	/// Et voilà, you've saved yourself a nanosecond of runtime effort! Haha.
+	/// If matching path(s) against two or more extensions, it can be more
+	/// efficient to do something like this instead:
 	///
-	/// ## Panics
+	/// ```
+	/// # use dowser::Extension;
+	/// const EXT_BR: Extension = Extension::new("br").unwrap();
+	/// const EXT_GZ: Extension = Extension::new("gz").unwrap();
+	/// const EXT_ZST: Extension = Extension::new("zst").unwrap();
 	///
-	/// This will panic if the extension (minus punctuation) is not 2-4 bytes
-	/// or contains whitespace or path separators.
-	pub fn codegen(mut src: &[u8]) -> String {
-		// Jump past the last period, if any.
-		if let Some(pos) = src.iter().rposition(|b| b'.'.eq(b)) {
-			assert!(
-				pos + 2 < src.len(),
-				"Extensions must be 2-4 bytes (not including punctuation).",
-			);
-			src = &src[pos + 1..];
+	/// let files = [
+	///     "src/index.html",
+	///     "src/index.html.br",
+	///     "src/index.html.gz",
+	///     "src/index.html.zst",
+	/// ];
+	///
+	/// for file in files {
+	///     if matches!(
+	///         Extension::from_path(file),
+	///         Some(EXT_BR | EXT_GZ | EXT_ZST),
+	///     ) {
+	///         // Happy times.
+	/// # assert!(file != "src/index.html");
+	///     }
+	/// }
+	/// ```
+	pub fn matches_path<P: AsRef<Path>>(self, path: P) -> bool {
+		self.matches_path_slice(path_slice!(path))
+	}
+
+	#[inline]
+	#[must_use]
+	/// # Path Has Matching Extension?
+	///
+	/// Same as [`Extension::matches_path`], but for paths represented as byte
+	/// slices.
+	pub const fn matches_path_slice(self, path: &[u8]) -> bool {
+		/// # Check Byte.
+		const fn check_byte(us: u8, them: u8) -> bool {
+			if let Some(them) = sanitize_byte(them) { them == us }
+			else { false }
 		}
 
-		// Make sure it's ASCII alphabetic.
-		assert!(
-			src.iter().all(u8::is_ascii_alphanumeric),
-			"Extensions must be ASCII alphanumeric."
-		);
+		// Split the path as if it had an extension the same size as the one
+		// we have stored.
+		let mut ext1 = self.as_bytes();
+		if ext1.len() + 2 <= path.len() {
+			let (path, mut ext2) = path.split_at(path.len() - ext1.len());
 
-		match src.len() {
-			2 => [
-				"Extension::Ext2(",
-				NiceU16::with_separator(
-					u16::from_le_bytes(lowercase!(src[0], src[1])),
-					NiceSeparator::Underscore,
-				).as_str(),
-				"_u16)",
-			].concat(),
-			3 => [
-				"Extension::Ext3(",
-				NiceU32::with_separator(
-					u32::from_le_bytes(lowercase!(b'.', src[0], src[1], src[2])),
-					NiceSeparator::Underscore,
-				).as_str(),
-				"_u32)",
-			].concat(),
-			4 => [
-				"Extension::Ext4(",
-				NiceU32::with_separator(
-					u32::from_le_bytes(lowercase!(src[0], src[1], src[2], src[3])),
-					NiceSeparator::Underscore,
-				).as_str(),
-				"_u32)",
-			].concat(),
-			_ => panic!("Extensions must be 2-4 bytes (not including punctuation)."),
+			// Shrink the extensions on each matching byte.
+			while let [ a, rest1 @ .. ] = ext1 && let [ b, rest2 @ .. ] = ext2 && check_byte(*a, *b) {
+				ext1 = rest1;
+				ext2 = rest2;
+			}
+
+			// They're equal if we shrank all the way to zero, and the
+			// remainder of the path ends with a not-slash and dot.
+			ext1.is_empty() && matches!(path, [ .., notslash!(), b'.' ])
 		}
+		// Lengths didn't work out.
+		else { false }
+	}
+}
+
+
+
+#[inline(always)]
+#[expect(clippy::inline_always, reason = "Foundational.")]
+/// # Verify Byte.
+///
+/// Checks the byte is ASCII alphanumeric, `!`, `#`, `+`, `-`, or `_`, and
+/// returns it, lowercasing if UPPER.
+const fn sanitize_byte(src: u8) -> Option<u8> {
+	match src {
+		b'!' | b'#' | b'+' | b'-' | b'0'..=b'9' | b'_' | b'a'..=b'z' => Some(src),
+		b'A'..=b'Z' => Some(src | ASCII_CASE_MASK),
+		_ => None,
 	}
 }
 
@@ -935,81 +597,129 @@ mod tests {
 	use super::*;
 
 	#[test]
-	/// # Triple Check our is_ascii_alphanumeric! macro.
-	fn t_is_ascii_alphanumeric() {
-		assert!(is_ascii_alphanumeric!(b'a'));
-		assert!(is_ascii_alphanumeric!(b'a', b'b', b'c', b'd'));
-
-		assert!(! is_ascii_alphanumeric!(b'?'));
-		assert!(! is_ascii_alphanumeric!(b'a', b'.', b'c', b'd'));
+	fn t_sanitize_byte() {
+		for i in u8::MIN..=u8::MAX {
+			// Alphanumerics should come back lowercase.
+			if i.is_ascii_alphanumeric() || matches!(i, b'!' | b'#' | b'+' | b'-' | b'_') {
+				assert_eq!(
+					sanitize_byte(i),
+					Some(i.to_ascii_lowercase()),
+				);
+			}
+			// Everything else should be rejected.
+			else { assert!(sanitize_byte(i).is_none()); }
+		}
 	}
 
 	#[test]
-	#[cfg_attr(debug_assertions, should_panic)]
-	/// # Bad New.
-	///
-	/// Should panic in debug builds, but not release ones.
-	fn t_new2_bad1() { let _res = Extension::new2(*b"??"); }
-
-	#[test]
-	#[cfg_attr(debug_assertions, should_panic)]
-	/// # Bad New.
-	///
-	/// Should panic in debug builds, but not release ones.
-	fn t_new3_bad1() { let _res = Extension::new3(*b"???"); }
-
-	#[test]
-	#[cfg_attr(debug_assertions, should_panic)]
-	/// # Bad New.
-	///
-	/// Should panic in debug builds, but not release ones.
-	fn t_new4_bad1() { let _res = Extension::new4(*b"????"); }
-
-	#[test]
-	#[cfg_attr(debug_assertions, should_panic)]
-	/// # Bad New.
-	///
-	/// Should panic in debug builds, but not release ones.
-	fn t_new2_bad2() { let _res = Extension::new2(*b"AB"); }
-
-	#[test]
-	#[cfg_attr(debug_assertions, should_panic)]
-	/// # Bad New.
-	///
-	/// Should panic in debug builds, but not release ones.
-	fn t_new3_bad2() { let _res = Extension::new3(*b"ABC"); }
-
-	#[test]
-	#[cfg_attr(debug_assertions, should_panic)]
-	/// # Bad New.
-	///
-	/// Should panic in debug builds, but not release ones.
-	fn t_new4_bad2() { let _res = Extension::new4(*b"ABCD"); }
-
-	#[test]
-	fn t_codegen() {
-		assert_eq!(Extension::codegen(b"js"), "Extension::Ext2(29_546_u16)");
-		assert_eq!(Extension::codegen(b"JS"), "Extension::Ext2(29_546_u16)");
-		assert_eq!(Extension::codegen(b"/path/to/file.JS"), "Extension::Ext2(29_546_u16)");
-
-		assert_eq!(Extension::codegen(b"jpg"), "Extension::Ext3(1_735_420_462_u32)");
-		assert_eq!(Extension::codegen(b"JPG"), "Extension::Ext3(1_735_420_462_u32)");
-		assert_eq!(Extension::codegen(b".jpg"), "Extension::Ext3(1_735_420_462_u32)");
-
-		assert_eq!(Extension::codegen(b"html"), "Extension::Ext4(1_819_112_552_u32)");
-		assert_eq!(Extension::codegen(b"htML"), "Extension::Ext4(1_819_112_552_u32)");
-		assert_eq!(Extension::codegen(b"index.html"), "Extension::Ext4(1_819_112_552_u32)");
+	fn t_notslash() {
+		for i in u8::MIN..=u8::MAX {
+			// The notslash!() pattern is supposed to match everything but
+			// forward and backward slashes.
+			assert_eq!(
+				i != b'/' && i != b'\\',
+				matches!(i, notslash!()),
+			);
+		}
 	}
 
 	#[test]
-	#[should_panic]
-	fn t_codegen_bad1() { let _res = Extension::codegen(b""); }
+	/// # Extension Sanity.
+	///
+	/// Most of these concepts are independently covered by the doctests, but
+	/// not necessarily for each possible size.
+	fn t_ext_len() {
+		const RAW: [&str; EXT_SIZE] = [
+			"1",
+			"gz",
+			"av1",
+			"html",
+			"vcard",
+			"jsonld",
+			"geojson",
+			"manifest",
+		];
+
+		for i in RAW {
+			let Some(ext) = Extension::new(i) else {
+				panic!("Extension failed: {i:?}");
+			};
+
+			// Matching should work regardless of case.
+			let mut file = format!("file.{i}");
+			assert!(ext.matches_path(&file));
+			assert_eq!(Extension::from_path(&file), Some(ext));
+
+			file.make_ascii_uppercase();
+			assert!(ext.matches_path(&file));
+			assert_eq!(Extension::from_path(&file), Some(ext));
+
+			// Change the extension, change the result.
+			file.push('s');
+			assert!(! ext.matches_path(&file));
+
+			// Double-check string/length sanity.
+			assert_eq!(ext.as_str(), i);
+			assert_eq!(ext.to_string(), i);
+			assert_eq!(ext.len(), i.len());
+
+			// Extension from a capital should be the same.
+			let Some(ext2) = Extension::new(&i.to_ascii_uppercase()) else {
+				panic!("Extension failed: {:?}", i.to_ascii_uppercase());
+			};
+			assert_eq!(ext, ext2);
+			assert_eq!(ext.as_str(), ext2.as_str());
+		}
+
+		// Sorting should factor length first.
+		let mut exts = RAW.into_iter().filter_map(Extension::new).collect::<Vec<_>>();
+		assert!(exts.is_sorted());
+
+		// Then bytes (if the same size).
+		exts.push(Extension::new("Z").unwrap());
+		exts.push(Extension::new("c").unwrap());
+		exts.push(Extension::new("C").unwrap());
+		exts.sort();
+		exts.dedup(); // Should kill one of the "c"s.
+
+		// The "z" and other "c" should have floated up to the almost-top.
+		assert_eq!(exts[0].as_str(), "1");
+		assert_eq!(exts[1].as_str(), "c");
+		assert_eq!(exts[2].as_str(), "z");
+		assert_eq!(exts[3].as_str(), "gz");
+
+		// If we remove them, we should be right back where we started.
+		// (Sort/dedupe shouldn't have affected anything else.)
+		exts.remove(2);
+		exts.remove(1);
+		assert!(exts.iter().map(|e| e.as_str()).eq(RAW.into_iter()));
+	}
 
 	#[test]
-	#[should_panic]
-	fn t_codegen_bad2() { let _res = Extension::codegen(b"xhtml"); }
+	/// # Realworld Extensions.
+	///
+	/// Make sure all the extensions featured in Wiki's article and the LotF
+	/// database — with lengths 1-8 — are parseable by Extension.
+	///
+	/// [https://en.wikipedia.org/wiki/List_of_filename_extensions]
+	/// [https://wordpress.org/plugins/blob-mimes/]
+	fn t_ext_real() {
+		let raw = std::fs::read_to_string("tests/extensions.txt").expect("Missing extensions.txt.");
+		let all: Vec<&str> = raw.lines()
+			.filter_map(|line| {
+				let line = line.trim();
+				if line.is_empty() { None }
+				else { Some(line) }
+			})
+			.collect();
 
-	#[test]
-	#[should_panic]
-	fn t_codegen_bad3() { let _res = Extension::codegen(b"x./html"); }
+		assert_eq!(all.len(), 2790); // Make sure we got everything.
+
+		for ext in all {
+			assert!(
+				Extension::new(ext).is_some(),
+				"Failed for {ext}.",
+			);
+		}
+	}
 }

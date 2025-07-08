@@ -70,14 +70,13 @@ bench BENCH="":
 # Build Docs.
 @doc:
 	# Make sure nightly is installed; this version generates better docs.
-	env RUSTUP_PERMIT_COPY_RENAME=true rustup install nightly
+	# env RUSTUP_PERMIT_COPY_RENAME=true rustup install nightly
 
 	# Make the docs.
-	cargo +nightly doc \
+	cargo +nightly rustdoc \
 		--release \
-		--no-deps \
-		--features docsrs \
-		--target-dir "{{ cargo_dir }}"
+		--all-features \
+		--target-dir "{{ cargo_dir }}" -- --cfg docsrs
 
 	# Move the docs and clean up ownership.
 	[ ! -d "{{ doc_dir }}" ] || rm -rf "{{ doc_dir }}"

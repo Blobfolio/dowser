@@ -2,6 +2,42 @@
 
 
 
+## [0.16.0](https://github.com/Blobfolio/dowser/releases/tag/v0.16.0) - 2025-07-07
+
+### New
+
+* `Extension::as_bytes`
+* `Extension::as_str`
+* `Extension::from_path_slice`
+* `Extension::from_path`
+* `Extension::is_empty`
+* `Extension::len`
+* `Extension::matches_path_slice`
+* `Extension::matches_path`
+* `Extension::new`
+* Impl `AsRef<[u8]>` for `Extension`
+* Impl `AsRef<str>` for `Extension`
+* Impl `Ord`/`PartialOrd` for `Extension` (length, then value)
+
+### Changed
+
+* `Extension` now supports lengths of `1..=8` (instead of just `2..=4`)
+* `Extension` now supports `!`, `#`, `+`, `-`, and `_` (in addition to ASCII alphanumerics)
+
+### Breaking
+
+* `Extension` is now a struct (instead of an enum)
+* `Extension` methods are no longer differentiated by length:
+  * Replaced `Extension::new2`/`new3`/`new4` w/ `Extension::new`
+  * Replaced `Extension::try_from2`/`try_from3`/`try_from4` w/ `Extension::from_path`
+  * Removed `Extension::slice_ext2`/`slice_ext3`/`slice_ext4` (use `std::path::Path::extension` instead)
+* `Hash` for `Extension` now uses `Hasher::write_u64` for all values
+* Removed `PartialEq<AsRef<Path>>` for `Extension` (use `Extension::matches_path` instead)
+* Removed `Extension::codegen` (use `const {}` assignments instead)
+* Removed `Extension::slice_ext` (use `std::path::Path::extension` instead)
+
+
+
 ## [0.15.0](https://github.com/Blobfolio/dowser/releases/tag/v0.15.0) - 2025-06-26
 
 ### Changed

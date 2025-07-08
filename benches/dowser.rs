@@ -12,7 +12,7 @@ use dowser::{
 };
 
 
-const GZ: Extension = Extension::new2(*b"gz");
+const GZ: Extension = Extension::new("gz").unwrap();
 
 
 benches!(
@@ -24,6 +24,6 @@ benches!(
 	Bench::new("dowser::Dowser::from(/usr/share).filter(gz).collect()")
 		.run_seeded(
 			Dowser::from("/usr/share"),
-			|d| d.filter(|p| Some(GZ) == Extension::try_from2(p)).collect::<Vec<_>>()
+			|d| d.filter(|p| GZ.matches_path(p)),
 		),
 );
