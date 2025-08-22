@@ -2,6 +2,14 @@
 
 
 
+## [0.16.1](https://github.com/Blobfolio/dowser/releases/tag/v0.16.1) - 2025-08-21
+
+### Fixed
+
+* `Dowser::without_paths` queued paths for crawl instead of ignoring them.
+
+
+
 ## [0.16.0](https://github.com/Blobfolio/dowser/releases/tag/v0.16.0) - 2025-07-07
 
 ### New
