@@ -31,11 +31,10 @@ use std::{
 /// * [`Dowser::without_path`] / [`Dowser::without_paths`]
 ///
 /// The `with_*` methods add sources to be crawled, while the `without_*`
-/// methods shitlist sources, preventing them from being yielded by the
-/// iterator.
+/// methods do the opposite.
 ///
-/// If using `without_*`, be sure to chain those _first_, before any `with_*`
-/// calls, just in case your withs and withouts overlap. ;)
+/// If using both, the `without_*`s should be chained _first_ to ensure they
+/// have priority over any matching paths in the `with_*`s.
 ///
 /// From there, you can do your normal [`Iterator`](std::iter::Iterator) business.
 ///
@@ -338,8 +337,8 @@ impl Dowser {
 	#[inline]
 	/// # Without Path.
 	///
-	/// This will prevent the provided directory or file from being crawled or
-	/// included in the output.
+	/// This will prevent the provided directory or file from being (directly)
+	/// crawled or included in the output.
 	///
 	/// Note: without-path(s) should be specified before with-path(s), just in
 	/// case the sets overlap.
@@ -368,8 +367,8 @@ impl Dowser {
 	#[inline]
 	/// # Without Paths.
 	///
-	/// This will prevent the provided directories or files from being crawled
-	/// or included in the output.
+	/// This will prevent the provided paths from being (directly) crawled or
+	/// included in the output.
 	///
 	/// Note: without-path(s) should be specified before with-path(s), just in
 	/// case the sets overlap.
@@ -397,7 +396,7 @@ impl Dowser {
 			! is_singular_path(&paths),
 			"Dowser::without_paths requires an Iterator of paths, not a direct Path/PathBuf object.",
 		);
-		paths.into_iter().fold(self, Self::with_path)
+		paths.into_iter().fold(self, Self::without_path)
 	}
 }
 
@@ -423,6 +422,7 @@ fn is_singular_path<T>(raw: T) -> bool {
 mod tests {
 	use super::*;
 	use brunch as _;
+	use std::collections::BTreeSet;
 
 	#[test]
 	fn t_new() {
@@ -528,6 +528,30 @@ mod tests {
 	}
 
 	#[test]
+	fn t_without() {
+		let root = std::fs::canonicalize("./tests/links").expect("Missing test directory.");
+
+		// Exclude 4 (file) and 6 (directory).
+		let found: BTreeSet<PathBuf> = Dowser::default()
+			.without_paths(&["./tests/links/04", "./tests/links/06"])
+			.with_path("./tests/links")
+			.collect();
+
+		assert_eq!(
+			found.len(),
+			4,
+			"Unexpected number of files found!"
+		);
+
+		for stub in ["01", "02", "03", "06/08"] {
+			assert!(
+				found.contains(&root.join(stub)),
+				"Missing {stub}.",
+			);
+		}
+	}
+
+	#[test]
 	#[should_panic]
 	fn t_with_paths1() {
 		let path: &Path = "/usr/bin".as_ref();
@@ -573,7 +597,6 @@ mod tests {
 
 	#[test]
 	fn t_read_paths_from_file() {
-		use std::collections::BTreeSet;
 		use std::fs::File;
 		use std::io::Write;
 
