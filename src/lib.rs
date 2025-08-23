@@ -94,12 +94,8 @@ let men_gz: Vec::<PathBuf> = Dowser::default()
 	unused_import_braces,
 )]
 
-#![expect(clippy::redundant_pub_crate, reason = "Unresolvable.")]
-
-mod entry;
 mod ext;
 mod iter;
 
-pub(crate) use entry::Entry;
 pub use ext::Extension;
 pub use iter::Dowser;
