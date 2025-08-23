@@ -8,16 +8,43 @@
 [![license](https://img.shields.io/badge/license-wtfpl-ff1493?style=flat-square)](https://en.wikipedia.org/wiki/WTFPL)
 [![contributions welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square&label=contributions)](https://github.com/Blobfolio/dowser/issues)
 
-`Dowser` is a(nother) fast, recursive file-finding library for Unix/Rust. It differs from [`Walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
+
+
+`Dowser` is a(nother) fast, recursive file-finding library for Rust, but it differs from [`walkdir`](https://crates.io/crates/walkdir) and kin in a number of ways:
 
 * It is not limited to one root; any number of file and directory paths can be loaded and traversed en masse;
 * Symlinks are followed by default, but can be disabled using `Dowser::without_symlinks`;
 * Hidden paths and mount points are traversed like anything else;
 * Matching file paths are canonicalized and deduped before yielding;
+* Directory paths are automatically crawled but **not** yielded;
 
-If those things sound nice, this library might be a good fit.
 
-On the other hand, `Dowser` is optimized for _file_ searching; the iterator crawls but does not yield directory paths, which could be bad if you need those too. Haha.
+
+## Example
+
+Create a new instance using `Dowser::default`, then specify root paths to ignore and/or include with `Dowser::without_path` and `Dowser::with_path`, respectively.
+
+From there, leverage your favorite [`Iterator`](std::iter::Iterator) trait methods to filter/collect the results.
+
+```rust
+use dowser::Dowser;
+use std::path::PathBuf;
+
+// Return all files under "/usr/share/man", and probably some from other places
+// since some programs prefer to symlink their documentation.
+let men: Vec::<PathBuf> = Dowser::default()
+    .with_path("/usr/share/man")
+    .collect();
+
+// Same as above, but filtering paths as discovered so as to only keep the
+// gzipped ones.
+let men_gz: Vec::<PathBuf> = Dowser::default()
+    .with_path("/usr/share/man")
+    .filter(|p|
+        p.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("gz"))
+    )
+    .collect();
+```
 
 
 
