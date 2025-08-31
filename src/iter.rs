@@ -386,9 +386,14 @@ impl Entry {
 		}
 
 		// Canonicalize and return!
-		let path = std::fs::canonicalize(path).ok()?;
-		if path.is_dir() { Some(Self::Dir(path)) }
-		else { Some(Self::File(path)) }
+		if
+			let Ok(path) = std::fs::canonicalize(path) &&
+			let Ok(meta) = std::fs::symlink_metadata(&path) // Path is canonical so no need to resolve links.
+		{
+			if meta.is_dir() { Some(Self::Dir(path)) }
+			else { Some(Self::File(path)) }
+		}
+		else { None }
 	}
 
 	#[expect(clippy::filetype_is_file, reason = "We're testing all three possibilities.")]
@@ -405,9 +410,12 @@ impl Entry {
 		else if ft.is_file() { Some(Self::File(e.path())) }
 
 		// The same cannot be said for symlinks…
-		else if follow {
-			let path = std::fs::canonicalize(e.path()).ok()?;
-			if path.is_dir() { Some(Self::Dir(path)) }
+		else if
+			follow &&
+			let Ok(path) = std::fs::canonicalize(e.path()) &&
+			let Ok(meta) = std::fs::symlink_metadata(&path) // Path is canonical so no need to resolve links.
+		{
+			if meta.is_dir() { Some(Self::Dir(path)) }
 			else { Some(Self::File(path)) }
 		}
 
