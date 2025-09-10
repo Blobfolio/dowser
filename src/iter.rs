@@ -397,6 +397,7 @@ impl Entry {
 	}
 
 	#[expect(clippy::filetype_is_file, reason = "We're testing all three possibilities.")]
+	#[inline]
 	/// # From `DirEntry`.
 	///
 	/// An optimized alternative to [`Entry::from_path`] used when processing
