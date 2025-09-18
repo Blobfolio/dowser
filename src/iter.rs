@@ -2,16 +2,31 @@
 # Dowser: Dowser
 */
 
-use crate::Entry;
 use dactyl::NoHash;
 use std::{
 	collections::HashSet,
-	ffi::OsStr,
+	ffi::{
+		OsStr,
+		OsString,
+	},
+	fs::DirEntry,
 	path::{
 		Path,
 		PathBuf,
 	},
 };
+
+
+
+/// # Static Hasher.
+///
+/// This is used for cheap collision detection. No need to get fancy with it.
+const AHASHER: ahash::RandomState = ahash::RandomState::with_seeds(
+	0x8596_cc44_bef0_1aa0,
+	0x98d4_0948_da60_19ae,
+	0x49f1_3013_c503_a6aa,
+	0xc4d7_82ff_3c9f_7bef,
+);
 
 
 
@@ -24,30 +39,28 @@ use std::{
 ///
 /// ## Usage
 ///
-/// All you need to do is chain [`Dowser::default`] with one or more of the
-/// following seed methods:
+/// Create a new instance using [`Dowser::default`], then specify root paths
+/// to ignore and/or include with [`Dowser::without_path`] and
+/// [`Dowser::with_path`], respectively.
 ///
-/// * [`Dowser::with_path`] / [`Dowser::with_paths`]
-/// * [`Dowser::without_path`] / [`Dowser::without_paths`]
+/// (When excluding _and_ including, the order matters. To be safe, apply the
+/// withouts first.)
 ///
-/// The `with_*` methods add sources to be crawled, while the `without_*`
-/// methods do the opposite.
-///
-/// If using both, the `without_*`s should be chained _first_ to ensure they
-/// have priority over any matching paths in the `with_*`s.
-///
-/// From there, you can do your normal [`Iterator`](std::iter::Iterator) business.
+/// From there, leverage your favorite [`Iterator`](std::iter::Iterator)
+/// trait methods to filter/collect the results.
 ///
 /// ## Examples
 ///
-/// ```no_run
+/// ```
 /// use dowser::Dowser;
 /// use std::path::PathBuf;
 ///
 /// let files: Vec<PathBuf> = Dowser::default()
-///     .with_path("/usr/share")
-///     // You could filter_map(), etc., here, with the understanding that
-///     // every path you get will belong to a valid, canonical file.
+///     .with_path("/usr/share/images")
+///     .filter(|p|
+///         p.extension()
+///             .is_some_and(|ext| ext.eq_ignore_ascii_case("bmp"))
+///     )
 ///     .collect();
 /// ```
 pub struct Dowser {
@@ -70,6 +83,10 @@ pub struct Dowser {
 
 impl Default for Dowser {
 	#[inline]
+	/// # New Instance.
+	///
+	/// Initialize and return a new [`Dowser`] instance with modest initial
+	/// buffers and symlink-following enabled.
 	fn default() -> Self {
 		Self {
 			files: Vec::with_capacity(8),
@@ -80,50 +97,47 @@ impl Default for Dowser {
 	}
 }
 
-/// # Helper: Generate From Impl.
-macro_rules! from_single {
+/// # Helper: Generate `From` impls.
+macro_rules! from {
 	($($ty:ty),+ $(,)?) => ($(
+		/// # New Instance w/ Entry Point.
+		///
+		/// This method is equivalent to calling [`Dowser::default`] and
+		/// [`Dowser::with_path`] separately.
 		impl From<$ty> for Dowser {
 			#[inline]
 			fn from(src: $ty) -> Self { Self::default().with_path(src) }
 		}
+
+		/// # New Instance w/ Entry Point(s).
+		///
+		/// This method is equivalent to calling [`Dowser::default`], then
+		/// calling [`Dowser::with_path`] in a loop.
+		impl From<&[$ty]> for Dowser {
+			#[inline]
+			fn from(src: &[$ty]) -> Self {
+				src.iter().fold(Dowser::default(), Dowser::with_path)
+			}
+		}
+
+		/// # New Instance w/ Entry Point(s).
+		///
+		/// This method is equivalent to calling [`Dowser::default`], then
+		/// calling [`Dowser::with_path`] in a loop.
+		impl From<Vec<$ty>> for Dowser {
+			#[inline]
+			fn from(src: Vec<$ty>) -> Self { Self::from(src.as_slice()) }
+		}
 	)+);
 }
 
-from_single!(&OsStr, &Path, PathBuf, &PathBuf, &str, String, &String);
-
-impl From<&[PathBuf]> for Dowser {
-	fn from(src: &[PathBuf]) -> Self {
-		let mut out = Self::default();
-
-		for e in src.iter().filter_map(|p| Entry::from_path(p, true)) {
-			if out.seen.insert(e.hash()) {
-				match e {
-					Entry::Dir(p) =>  { out.dirs.push(p); },
-					Entry::File(p) => { out.files.push(p); },
-				}
-			}
-		}
-
-		out
-	}
-}
-
-impl From<Vec<PathBuf>> for Dowser {
-	fn from(src: Vec<PathBuf>) -> Self {
-		let mut out = Self::default();
-
-		for e in src.iter().filter_map(|p| Entry::from_path(p, true)) {
-			if out.seen.insert(e.hash()) {
-				match e {
-					Entry::Dir(p) =>  { out.dirs.push(p); },
-					Entry::File(p) => { out.files.push(p); },
-				}
-			}
-		}
-
-		out
-	}
+from!{
+	&OsStr,
+	&OsString, OsString,
+	&Path,
+	&PathBuf,  PathBuf,
+	&str,
+	&String,   String,
 }
 
 impl Iterator for Dowser {
@@ -132,7 +146,7 @@ impl Iterator for Dowser {
 	/// # Next!
 	///
 	/// This iterator yields canonical, deduplicated _file_ paths. Directories
-	/// are recursively traversed, but their paths are not returned.
+	/// are recursively traversed, but their paths are not shared.
 	///
 	/// Note: item ordering is arbitrary and likely to change from run-to-run.
 	fn next(&mut self) -> Option<Self::Item> {
@@ -145,81 +159,24 @@ impl Iterator for Dowser {
 			let Ok(rd) = std::fs::read_dir(p) else { continue; };
 			for e in rd {
 				if
-					let Some(e) = Entry::from_entry(e, self.symlinks) &&
-					self.seen.insert(e.hash())
+					let Ok(e) = e &&
+					let Some(e) = Entry::from_dir_entry(&e, self.symlinks)
 				{
-					match e {
-						Entry::Dir(p) =>  { self.dirs.push(p); },
-						Entry::File(p) => { self.files.push(p); },
-					}
+					self.record_entry(e);
 				}
 			}
+
+			// Rinse and repeat.
 		}
 	}
 
 	/// # Size Hints.
 	///
-	/// This iterator has an unknown size until the final directory has been
-	/// read, after which point it is just a matter of flushing the files it
-	/// found there.
+	/// Because entry points can technically be added at any point, no upper
+	/// bound is specified. If there are files in the buffer that haven't been
+	/// returned yet, their count serves as the lower limit.
 	fn size_hint(&self) -> (usize, Option<usize>) {
-		let lower = self.files.len();
-		let upper = self.dirs.is_empty().then_some(lower);
-		(lower, upper)
-	}
-}
-
-impl Dowser {
-	#[must_use]
-	/// # With Path.
-	///
-	/// Queue up a single file or directory path.
-	///
-	/// This can be called multiple times, but [`Dowser::with_paths`] probably
-	/// makes more sense when you want to crawl multiple roots.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// let files: Vec::<PathBuf> = Dowser::default()
-	///     .with_path("/my/dir")
-	///     .collect();
-	/// ```
-	pub fn with_path<P>(mut self, path: P) -> Self
-	where P: AsRef<Path> {
-		self.push_path(path);
-		self
-	}
-
-	#[inline]
-	#[must_use]
-	/// # With Paths.
-	///
-	/// Queue up multiple file and/or directory paths.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// let files: Vec::<PathBuf> = Dowser::default()
-	///     .with_paths(&["/my/dir"])
-	///     .collect();
-	/// ```
-	///
-	/// ## Panics
-	///
-	/// This will panic if you try to pass a single `Path` or `PathBuf` object
-	/// directly to this method (instead of a collection of same). Use
-	/// [`Dowser::with_path`] to add such an object directly.
-	pub fn with_paths<P, I>(self, paths: I) -> Self
-	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(! is_singular_path(&paths), "Dowser::with_paths requires an Iterator of paths, not a direct Path/PathBuf object.");
-		paths.into_iter().fold(self, Self::with_path)
+		(self.files.len(), None)
 	}
 }
 
@@ -232,30 +189,25 @@ impl Dowser {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```
 	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
 	/// let mut crawl = Dowser::default();
 	/// crawl.push_path("/my/dir");
-	/// let files: Vec::<PathBuf> = crawl.collect();
+	/// let files: Vec<PathBuf> = crawl.collect();
+	///
+	/// // Alternatively, you can just use `From`:
+	/// let files: Vec<PathBuf> = Dowser::from("/my/dir").collect();
 	/// ```
 	pub fn push_path<P>(&mut self, path: P)
 	where P: AsRef<Path> {
-		if
-			let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) &&
-			self.seen.insert(e.hash())
-		{
-			match e {
-				Entry::Dir(p) =>  { self.dirs.push(p); },
-				Entry::File(p) => { self.files.push(p); },
-			}
+		if let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) {
+			self.record_entry(e);
 		}
 	}
-}
 
-impl Dowser {
-	/// # Load Paths From File.
+	/// # Push Path(s) From File.
 	///
 	/// Queue up multiple file and/or directory paths from a text file, one
 	/// entry per line.
@@ -275,34 +227,56 @@ impl Dowser {
 	///
 	/// // Read the paths from list.txt.
 	/// let mut crawler = Dowser::default();
-	/// crawler.read_paths_from_file("list.txt").unwrap();
+	/// crawler.push_paths_from_file("list.txt").unwrap();
 	///
 	/// // Crunch into a vec.
-	/// let files: Vec::<PathBuf> = crawler.collect();
+	/// let files: Vec<PathBuf> = crawler.collect();
 	/// ```
 	///
 	/// ## Errors
 	///
 	/// This method will bubble up any errors encountered while trying to read
 	/// the text file.
-	pub fn read_paths_from_file<P: AsRef<Path>>(&mut self, src: P)
+	pub fn push_paths_from_file<P: AsRef<Path>>(&mut self, src: P)
 	-> Result<(), std::io::Error> {
 		let raw = std::fs::read_to_string(src)?;
 		for line in raw.lines() {
 			let line = line.trim();
 			if
 				! line.is_empty() &&
-				let Some(e) = Entry::from_path(line.as_ref(), self.symlinks) &&
-				self.seen.insert(e.hash())
+				let Some(e) = Entry::from_path(line.as_ref(), self.symlinks)
 			{
-				match e {
-					Entry::Dir(p) =>  { self.dirs.push(p); },
-					Entry::File(p) => { self.files.push(p); },
-				}
+				self.record_entry(e);
 			}
 		}
 
 		Ok(())
+	}
+
+	#[must_use]
+	/// # With Path.
+	///
+	/// Queue up a single file or directory path.
+	///
+	/// This can be called multiple times if you want to crawl multiple roots.
+	///
+	/// ## Examples
+	///
+	/// ```
+	/// use dowser::Dowser;
+	/// use std::path::PathBuf;
+	///
+	/// let files: Vec<PathBuf> = Dowser::default()
+	///     .with_path("/my/dir")
+	///     .collect();
+	///
+	/// // Alternatively, you can just use `From`:
+	/// let files: Vec<PathBuf> = Dowser::from("/my/dir").collect();
+	/// ```
+	pub fn with_path<P>(mut self, path: P) -> Self
+	where P: AsRef<Path> {
+		self.push_path(path);
+		self
 	}
 }
 
@@ -319,7 +293,7 @@ impl Dowser {
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```
 	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
@@ -337,15 +311,20 @@ impl Dowser {
 	#[inline]
 	/// # Without Path.
 	///
-	/// This will prevent the provided directory or file from being (directly)
-	/// crawled or included in the output.
+	/// This method can be used to pre-emptively mark a file or directory path
+	/// as "seen", causing it to be ignored should it come up during the crawl.
 	///
-	/// Note: without-path(s) should be specified before with-path(s), just in
-	/// case the sets overlap.
+	/// It is recommended you specify "without" paths before "with" paths, just
+	/// in case there's any overlap.
+	///
+	/// Note: [`Dowser`] does not explicitly test for ancestry, so while an
+	/// excluded directory will never itself be crawled, select child paths
+	/// can still turn up in the results if external links resolve directly to
+	/// _them_ (and symlink-following is enabled).
 	///
 	/// ## Examples
 	///
-	/// ```no_run
+	/// ```
 	/// use dowser::Dowser;
 	/// use std::path::PathBuf;
 	///
@@ -359,61 +338,122 @@ impl Dowser {
 		if let Some(e) = Entry::from_path(path.as_ref(), self.symlinks) {
 			self.seen.insert(e.hash());
 		}
-
 		self
 	}
+}
 
-	#[must_use]
+impl Dowser {
 	#[inline]
-	/// # Without Paths.
+	/// # Record Path Entry.
 	///
-	/// This will prevent the provided paths from being (directly) crawled or
-	/// included in the output.
-	///
-	/// Note: without-path(s) should be specified before with-path(s), just in
-	/// case the sets overlap.
-	///
-	/// ## Examples
-	///
-	/// ```no_run
-	/// use dowser::Dowser;
-	/// use std::path::PathBuf;
-	///
-	/// let files: Vec<PathBuf> = Dowser::default()
-	///     .without_paths(&["/my/dir/ignore"])
-	///     .with_path("/my/dir")
-	///     .collect();
-	/// ```
-	///
-	/// ## Panics
-	///
-	/// This will panic if you try to pass a single `Path` or `PathBuf` object
-	/// directly to this method (instead of a collection of same). Use
-	/// [`Dowser::without_path`] to add such an object directly.
-	pub fn without_paths<P, I>(self, paths: I) -> Self
-	where P: AsRef<Path>, I: IntoIterator<Item=P> {
-		assert!(
-			! is_singular_path(&paths),
-			"Dowser::without_paths requires an Iterator of paths, not a direct Path/PathBuf object.",
-		);
-		paths.into_iter().fold(self, Self::without_path)
+	/// Mark a path as "seen" and if new, add it to the type-appropriate
+	/// bucket for later.
+	fn record_entry(&mut self, e: Entry) {
+		if self.seen.insert(e.hash()) {
+			match e {
+				Entry::Dir(p) =>  { self.dirs.push(p); },
+				Entry::File(p) => { self.files.push(p); },
+			}
+		}
 	}
 }
 
 
 
-/// # Is Singular Path?
-///
-/// Returns true if the type seems to be a singular `Path`/`PathBuf` object.
-/// This is necessary to differentiate them from proper collections
-/// implementing `IntoIterator<AsRef<Path>>`, at least until negative trait
-/// bounds are stabilized.
-fn is_singular_path<T>(raw: T) -> bool {
-	/// # Type to String.
-	fn type_of<T>(_: T) -> &'static str { std::any::type_name::<T>() }
+#[derive(Debug, Clone, Eq, PartialEq)]
+/// # Typed Path Entry.
+enum Entry {
+	/// # Directory.
+	Dir(PathBuf),
 
-	let kind = type_of(raw).trim_start_matches('&');
-	kind == "std::path::Path" || kind == "std::path::PathBuf"
+	/// # File.
+	File(PathBuf),
+}
+
+impl Entry {
+	/// # From Path (Untrusted).
+	///
+	/// Canonicalize, qualify, and return an [`Entry`] from an arbitrary system
+	/// path.
+	///
+	/// If the path doesn't exist, its metadata can't be parsed, or it is a
+	/// symlink and `follow == false`, `None` is returned instead.
+	fn from_path(path: &Path, follow: bool) -> Option<Self> {
+		// If symlinks are disabled, we need to confirm this isn't one.
+		if ! follow {
+			let meta = std::fs::symlink_metadata(path).ok()?;
+			if meta.file_type().is_symlink() { return None; }
+		}
+
+		// Canonicalize and return!
+		if
+			let Ok(path) = std::fs::canonicalize(path) &&
+			let Ok(meta) = std::fs::symlink_metadata(&path) // Path is canonical so no need to resolve links.
+		{
+			if meta.is_dir() { Some(Self::Dir(path)) }
+			else { Some(Self::File(path)) }
+		}
+		else { None }
+	}
+
+	#[expect(clippy::filetype_is_file, reason = "We're testing all three possibilities.")]
+	#[inline]
+	/// # From `DirEntry`.
+	///
+	/// An optimized alternative to [`Entry::from_path`] used when processing
+	/// items yielded during [`read_dir`](std::fs::read_dir) operations.
+	fn from_dir_entry(e: &DirEntry, follow: bool) -> Option<Self> {
+		let ft = e.file_type().ok()?;
+
+		// We can assume the path is canonical if a file or directory because
+		// the directory being read was itself canonical.
+		if ft.is_dir() { Some(Self::Dir(e.path())) }
+		else if ft.is_file() { Some(Self::File(e.path())) }
+
+		// The same cannot be said for symlinks…
+		else if
+			follow &&
+			let Ok(path) = std::fs::canonicalize(e.path()) &&
+			let Ok(meta) = std::fs::symlink_metadata(&path) // Path is canonical so no need to resolve links.
+		{
+			if meta.is_dir() { Some(Self::Dir(path)) }
+			else { Some(Self::File(path)) }
+		}
+
+		// If we aren't following symlinks, we have our answer.
+		else { None }
+	}
+}
+
+impl Entry {
+	#[cfg(unix)]
+	#[must_use]
+	#[inline]
+	/// # Hash Path (Optimized).
+	///
+	/// Entry paths are always canonical, so hashes can serve as a proxy for
+	/// uniqueness.
+	pub(super) fn hash(&self) -> u64 {
+		use std::os::unix::ffi::OsStrExt;
+
+		// Bytes hash faster than path components.
+		AHASHER.hash_one(self.path().as_os_str().as_bytes())
+	}
+
+	#[cfg(not(unix))]
+	#[must_use]
+	#[inline]
+	/// # Hash Path (Unoptimized).
+	///
+	/// Entry paths are always canonical, so hashes can serve as a proxy for
+	/// uniqueness.
+	pub(super) fn hash(&self) -> u64 { AHASHER.hash_one(self.path()) }
+
+	#[inline]
+	/// # Extract the Path.
+	fn path(&self) -> &Path {
+		match self { Self::Dir(p) | Self::File(p) => p.as_path() }
+	}
 }
 
 
@@ -533,7 +573,8 @@ mod tests {
 
 		// Exclude 4 (file) and 6 (directory).
 		let found: BTreeSet<PathBuf> = Dowser::default()
-			.without_paths(&["./tests/links/04", "./tests/links/06"])
+			.without_path("./tests/links/04")
+			.without_path("./tests/links/06")
 			.with_path("./tests/links")
 			.collect();
 
@@ -552,51 +593,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
-	fn t_with_paths1() {
-		let path: &Path = "/usr/bin".as_ref();
-		let _res = Dowser::default().with_paths(path);
-	}
-
-	#[test]
-	#[should_panic]
-	fn t_with_paths2() {
-		let path: &Path = "/usr/bin".as_ref();
-		let _res = Dowser::default().with_paths(&path.to_path_buf());
-	}
-
-	#[test]
-	fn t_with_paths3() {
-		let path: &Path = "/usr/bin".as_ref();
-		// These shouldn't panic.
-		let _res = Dowser::default().with_paths([path]);
-		let _res = Dowser::default().with_paths(&[path.to_path_buf()]);
-	}
-
-	#[test]
-	#[should_panic]
-	fn t_without_paths1() {
-		let path: &Path = "/usr/bin".as_ref();
-		let _res = Dowser::default().without_paths(path);
-	}
-
-	#[test]
-	#[should_panic]
-	fn t_without_paths2() {
-		let path: &Path = "/usr/bin".as_ref();
-		let _res = Dowser::default().without_paths(&path.to_path_buf());
-	}
-
-	#[test]
-	fn t_without_paths3() {
-		let path: &Path = "/usr/bin".as_ref();
-		// These shouldn't panic.
-		let _res = Dowser::default().without_paths([path]);
-		let _res = Dowser::default().without_paths(&[path.to_path_buf()]);
-	}
-
-	#[test]
-	fn t_read_paths_from_file() {
+	fn t_push_paths_from_file() {
 		use std::fs::File;
 		use std::io::Write;
 
@@ -629,7 +626,7 @@ mod tests {
 		if res.is_ok() && text_file.is_file() {
 			// Feed the text file to dowser, collect the results.
 			let mut crawl = Dowser::default();
-			crawl.read_paths_from_file(&text_file)
+			crawl.push_paths_from_file(&text_file)
 				.expect("Loading text file failed.");
 			let found: BTreeSet<PathBuf> = crawl.collect();
 

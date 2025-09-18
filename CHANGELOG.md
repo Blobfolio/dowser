@@ -2,6 +2,26 @@
 
 
 
+## [0.17.0](https://github.com/Blobfolio/dowser/releases/tag/v0.17.0) - 2025-09-18
+
+### New
+
+* `Dowser::From<OsString>`/`From<&OsString>`
+* `Dowser::From<Vec<T>>`/`From<&[T]>` (for all `From<T>` types)
+
+### Changed
+
+* `Iterator::size_hint` no longer provides upper bound
+* Miscellaneous code cleanup and lints
+
+### Breaking
+
+* Rename `Dowser::read_paths_from_file` to `Dowser::push_paths_from_file`
+* Remove `Dowser::with_paths`
+* Remove `Dowser::without_paths`
+
+
+
 ## [0.16.1](https://github.com/Blobfolio/dowser/releases/tag/v0.16.1) - 2025-08-21
 
 ### Fixed
