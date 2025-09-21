@@ -253,6 +253,33 @@ impl Dowser {
 		Ok(())
 	}
 
+	#[doc(hidden)]
+	/// # Push Path(s) From STDIN.
+	///
+	/// Same as [`Dowser::push_paths_from_file`], but lines are read from
+	/// STDIN instead.
+	///
+	/// Note: this method is "experimental" and subject to change.
+	pub fn push_paths_from_stdin(&mut self) {
+		use std::io::IsTerminal;
+
+		if self.seen.insert(AHASHER.hash_one(b"-")) {
+			let stdin = std::io::stdin();
+			if ! stdin.is_terminal() {
+				for line in stdin.lines() {
+					let Ok(line) = line else { break; };
+					let line = line.trim();
+					if
+						! line.is_empty() &&
+						let Some(e) = Entry::from_path(line.as_ref(), self.symlinks)
+					{
+						self.record_entry(e);
+					}
+				}
+			}
+		}
+	}
+
 	#[must_use]
 	/// # With Path.
 	///
