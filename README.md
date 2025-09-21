@@ -48,17 +48,6 @@ let men_gz: Vec::<PathBuf> = Dowser::default()
 
 
 
-## Installation
-
-Add `dowser` to your `dependencies` in `Cargo.toml`, like:
-
-```toml
-[dependencies]
-dowser = "0.17.*"
-```
-
-
-
 ## Example
 
 All you need to do is chain `Dowser::default` with one or more of the following seed methods:
@@ -84,4 +73,15 @@ let files1: Vec::<PathBuf> = Dowser::default()
         p.extension().is_some_and(|e| e.eq_ignore_ascii_case("gz"))
     )
     .collect();
+```
+
+
+
+## Installation
+
+Add `dowser` to your `dependencies` in `Cargo.toml`, like:
+
+```toml
+[dependencies]
+dowser = "0.17.*"
 ```
